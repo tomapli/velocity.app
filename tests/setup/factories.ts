@@ -16,3 +16,20 @@ export async function insertAuthUser(
   );
   return rows[0] as { id: string; email: string };
 }
+
+/**
+ * Inserts an allowlist row. Email is stored lowercase by trigger.
+ */
+export async function insertAuthorizedUser(
+  client: PoolClient,
+  opts: { email: string; userId?: string | null },
+): Promise<{ id: string; email: string; userId: string | null }> {
+  const { rows } = await client.query(
+    `insert into public.authorized_users (email, user_id)
+     values ($1, $2)
+     returning id, email, user_id as "userId"`,
+    [opts.email, opts.userId ?? null],
+  );
+
+  return rows[0] as { id: string; email: string; userId: string | null };
+}
