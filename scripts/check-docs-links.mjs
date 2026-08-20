@@ -3,11 +3,11 @@
  * Crawls the VitePress docs site and reports broken local links.
  *
  * Usage:
- *   pnpm wiki:check-links
- *   pnpm wiki:check-links http://localhost:5175
+ *   pnpm wiki:doctor
+ *   pnpm wiki:doctor http://localhost:5175
  *
  * Requires `pnpm wiki` to be running. Auto-detects a healthy local port when
- * no baseUrl is passed (stale processes on 5173 often return SPA shell for every path).
+ * no baseUrl is passed.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
@@ -196,21 +196,21 @@ async function fetchPage(base, pathname) {
 }
 
 /**
- * True when the server serves docs/public assets (not a stale SPA-only process).
+ * True when the server is a VitePress docs instance.
  */
 async function isHealthyDocsServer(base) {
   try {
-    const probe = await fetchPage(base, "/portfolio-sheets.html");
+    const probe = await fetchPage(base, "/CONTRIBUTING");
 
     if (probe.status !== 200 || probe.isBinary) {
       return false;
     }
 
-    if (isSpaShell(probe.text, probe.len)) {
-      return false;
-    }
-
-    return probe.text.includes("Portfolio") || probe.text.includes("sheet");
+    return (
+      probe.text.includes("Contributing") ||
+      probe.text.includes("vitepress") ||
+      probe.text.includes("@vite/client")
+    );
   } catch {
     return false;
   }
@@ -225,7 +225,7 @@ async function resolveBaseUrl() {
   if (explicit) {
     if (!(await isHealthyDocsServer(explicit))) {
       console.error(
-        `Docs server at ${explicit} is not serving static HTML from docs/public/.`,
+        `Docs server at ${explicit} is not serving the VitePress contributing page.`,
       );
       console.error(
         "Stop stale VitePress processes and run `pnpm wiki`, then re-check against that port.",
@@ -244,7 +244,7 @@ async function resolveBaseUrl() {
 
   console.error("No healthy VitePress docs server found on ports 5173–5176.");
   console.error("Run `pnpm wiki` in another terminal, note the Local URL, then:");
-  console.error("  pnpm wiki:check-links http://localhost:<port>");
+  console.error("  pnpm wiki:doctor http://localhost:<port>");
   process.exit(1);
 }
 
@@ -382,7 +382,6 @@ async function main() {
       }
 
       if (!isKnownRoute(resolved, mdRoutes, pubRoutes)) {
-        // Allow directory-style public index: /wiki/index
         failures.push({
           from: pathname,
           href,

@@ -103,7 +103,7 @@ function assertSameSet(expected, actual, label) {
 
 function assertSchemaMatchesSnapshot() {
   const before = run("git", ["status", "--porcelain", "--", "supabase/migrations", "db/schema"]);
-  const backupDir = mkdtempSync(path.join(os.tmpdir(), "tappka-migrations-"));
+  const backupDir = mkdtempSync(path.join(os.tmpdir(), "velocitapp-migrations-"));
 
   /**
    * `drizzle-kit generate` writes migration files when schema drifted.

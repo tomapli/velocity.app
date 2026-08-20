@@ -2,7 +2,7 @@
 # https://supabase.com/docs/guides/local-development/cli/config
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.
-project_id = "Tappka"
+project_id = "Velocitapp"
 
 [api]
 enabled = true
@@ -258,8 +258,8 @@ host = "smtp.resend.com"
 port = 465
 user = "resend"
 pass = "env(RESEND_SMTP_PASSWORD)"
-admin_email = "tappka-preview@tiimi.cz"
-sender_name = "Tappka"
+admin_email = "velocitapp-preview@tiimi.cz"
+sender_name = "Velocitapp"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
@@ -268,7 +268,7 @@ sender_name = "Tappka"
 
 # Custom email template for email change confirmation (PKCE flow)
 [auth.email.template.email_change]
-subject = "Tappka - potvrďte svůj CZU email"
+subject = "Velocitapp - potvrďte svůj CZU email"
 content_path = "supabase/templates/email_change.html"
 
 # Uncomment to customize notification email template

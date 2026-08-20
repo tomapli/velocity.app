@@ -2,24 +2,18 @@
 layout: home
 
 hero:
-  name: Tappka Docs
+  name: Velocitapp Docs
   text: Internal documentation
-  tagline: Guides, runbooks, and portfolio wiki.
+  tagline: Testing and contributing guides.
   actions:
     - theme: brand
-      text: Portfolio wiki
-      link: /wiki
-    - theme: alt
-      text: Testing runbook
+      text: Testing
       link: /runbooks/testing
     - theme: alt
-      text: Portfolio sheets
-      link: /portfolio-sheets
+      text: Contributing
+      link: /CONTRIBUTING
 
 features:
-  - title: Portfolio wiki
-    details: Static HTML sheet specs and portfolio reference pages.
-    link: /wiki
   - title: Testing
     details: Unit, component, integration, and E2E layers — when to use each.
     link: /runbooks/testing

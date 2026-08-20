@@ -46,17 +46,17 @@ pnpm test:integration  # Testcontainers; does not touch the local Supabase DB
 pnpm test:e2e          # needs a built app (`pnpm build`) and local Supabase
 ```
 
-Full guide: [docs/runbooks/testing.md](docs/runbooks/testing.md)
+Full guide: [Testing](runbooks/testing.md)
 
 # Wiki
 
-Portfolio sheet specs live under `docs/wiki/` (markdown shims) and `docs/public/wiki/` (static HTML). Start the VitePress site with:
+Start the VitePress docs site with:
 
 ```bash
 pnpm wiki
 ```
 
-That generates HTML shims, then opens the docs server. Check local links while it is running:
+It currently includes [Testing](runbooks/testing.md) and this contributing guide. Check local links while it is running:
 
 ```bash
 pnpm wiki:doctor

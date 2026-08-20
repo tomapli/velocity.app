@@ -6,7 +6,7 @@
  */
 import { execSync } from 'child_process';
 
-const CONTAINER_NAME = process.env.SUPABASE_AUTH_CONTAINER || 'supabase_auth_Tappka';
+const CONTAINER_NAME = process.env.SUPABASE_AUTH_CONTAINER || 'supabase_auth_Velocitapp';
 
 const main = () => {
   try {
