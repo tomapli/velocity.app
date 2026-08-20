@@ -417,13 +417,52 @@ mark[data-color="orange"] { background-color: #fdba74; }
   .borrow-fade-up { animation: borrow-fade-up 0.4s ease-out 0.15s both; }
 }
 
-/* ── Copilot search bar rotating gradient ─────────────────────────────────── */
+/* ── Copilot search bar — Instagram-style gradient ────────────────────────── */
+.copilot-gradient-shell {
+  --copilot-purple: oklch(0.38 0.16 300);
+  --copilot-magenta: oklch(0.48 0.2 330);
+  --copilot-coral: oklch(0.55 0.24 15);
+  --copilot-orange: oklch(0.65 0.19 48);
+  --copilot-gold: oklch(0.72 0.15 70);
+}
+
+.dark .copilot-gradient-shell {
+  --copilot-purple: oklch(0.42 0.17 300);
+  --copilot-magenta: oklch(0.52 0.21 330);
+  --copilot-coral: oklch(0.58 0.24 15);
+  --copilot-orange: oklch(0.68 0.19 48);
+  --copilot-gold: oklch(0.75 0.15 70);
+}
+
+.copilot-gradient {
+  background: conic-gradient(
+    from 0deg,
+    var(--copilot-purple),
+    var(--copilot-magenta),
+    var(--copilot-coral),
+    var(--copilot-orange),
+    var(--copilot-gold),
+    var(--copilot-purple)
+  );
+}
+
+.copilot-gradient-static {
+  background: linear-gradient(
+    135deg,
+    var(--copilot-purple),
+    var(--copilot-magenta),
+    var(--copilot-coral),
+    var(--copilot-orange),
+    var(--copilot-gold)
+  );
+}
+
 @media (prefers-reduced-motion: no-preference) {
   @keyframes copilot-gradient-rotate {
     to { transform: rotate(360deg); }
   }
 
   .copilot-gradient-rotate {
-    animation: copilot-gradient-rotate 4s linear infinite;
+    animation: copilot-gradient-rotate 1.25s linear infinite;
   }
 }

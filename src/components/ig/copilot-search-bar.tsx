@@ -39,25 +39,23 @@ export function CopilotSearchBar({
     <form onSubmit={handleSubmit} className="mx-auto w-full max-w-2xl">
       <div
         className={cn(
-          "relative overflow-hidden rounded-[2rem] p-[2px] shadow-lg",
-          "motion-reduce:bg-[linear-gradient(135deg,var(--chart-2),var(--chart-3),var(--chart-4),var(--voltage))]",
+          "copilot-gradient-shell relative overflow-hidden rounded-[2rem] p-1 shadow-lg",
+          "motion-reduce:copilot-gradient-static",
         )}
       >
         <div
           className={cn(
-            "pointer-events-none absolute inset-[-50%] motion-safe:copilot-gradient-rotate motion-reduce:hidden",
-            "bg-[conic-gradient(from_0deg,var(--chart-2),var(--chart-3),var(--chart-4),var(--voltage),var(--chart-2))]",
+            "copilot-gradient pointer-events-none absolute inset-[-60%] motion-safe:copilot-gradient-rotate motion-reduce:hidden",
           )}
           aria-hidden
         />
         <div
           className={cn(
-            "pointer-events-none absolute inset-[-50%] opacity-60 blur-xl motion-safe:copilot-gradient-rotate motion-reduce:hidden",
-            "bg-[conic-gradient(from_0deg,var(--chart-2),var(--chart-3),var(--chart-4),var(--voltage),var(--chart-2))]",
+            "copilot-gradient pointer-events-none absolute inset-[-60%] opacity-90 blur-2xl motion-safe:copilot-gradient-rotate motion-reduce:hidden",
           )}
           aria-hidden
         />
-        <div className="relative flex items-center gap-2 rounded-[calc(2rem-2px)] bg-background/95 px-4 py-3 backdrop-blur-sm sm:px-5 sm:py-4">
+        <div className="relative flex items-center gap-2 rounded-[calc(2rem-4px)] bg-background/95 px-4 py-3 backdrop-blur-sm sm:px-5 sm:py-4">
           <input
             ref={inputRef}
             type="text"
@@ -79,9 +77,12 @@ export function CopilotSearchBar({
             disabled={disabled || value.trim().length === 0}
             aria-label="Search Instagram profile"
             className={cn(
-              "size-10 shrink-0 rounded-full bg-primary text-primary-foreground shadow-md",
-              "transition-transform duration-200 hover:scale-105 hover:bg-primary/90",
-              "motion-reduce:hover:scale-100",
+              "size-10 shrink-0 cursor-pointer rounded-full bg-primary text-primary-foreground shadow-md",
+              "transition-[transform,box-shadow] duration-150 ease-out",
+              "hover:scale-125 hover:bg-primary/90 hover:shadow-xl",
+              "active:scale-110 active:cursor-pointer",
+              "disabled:cursor-not-allowed",
+              "motion-reduce:hover:scale-100 motion-reduce:active:scale-100",
             )}
           >
             <Search className="size-4" />
