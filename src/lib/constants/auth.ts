@@ -9,6 +9,11 @@ export const AUTH_CALLBACK_PATH = "/auth/callback";
 export const AUTH_ERROR_PATH = "/auth/error";
 export const AUTH_UNAUTHORIZED_PATH = "/auth/unauthorized";
 
+/**
+ * Default page to redirect users to after successful login.
+ */
+export const DEFAULT_LOGGED_IN_PAGE = "/";
+
 export const AUTH_OAUTH_PROVIDER = "google" as const;
 
 /**
@@ -18,9 +23,11 @@ export const UNAUTHORIZED_SIGNUP_MESSAGE =
   "This email is not authorized to access the app.";
 
 /**
- * Default page to redirect users to after successful login.
+ * Query flag set after a successful OAuth login so the intro video can play once.
  */
-export const DEFAULT_LOGGED_IN_PAGE = "/";
+export const LOGIN_INTRO_QUERY_PARAM = "welcome";
+export const LOGIN_INTRO_QUERY_VALUE = "1";
+export const LOGIN_INTRO_VIDEO_SRC = "/Generate_a_very_short_video_wh.mp4";
 
 /**
  * Checks if a given pathname is a public route.

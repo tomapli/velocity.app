@@ -1,19 +1,19 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { withLoginIntro } from "@/lib/auth/login-intro";
 import {
   createAuthFailureUrl,
+  createSuccessUrl,
   redirectWithCookies,
 } from "@/lib/auth-helpers";
-import { DEFAULT_LOGGED_IN_PAGE } from "@/lib/constants/auth";
-import { validateRedirectUrl } from "@/lib/utils";
 
 /**
  * Exchanges an auth code for a session (OAuth). Allowlist rejections land on
  * /auth/unauthorized; other failures go to /auth/error.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next");
   const oauthError =
@@ -62,13 +62,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const validatedNext = validateRedirectUrl(next, origin);
-  const redirectTo = validatedNext ?? DEFAULT_LOGGED_IN_PAGE;
-  const redirectUrl = new URL(redirectTo, origin);
-  const url = request.nextUrl.clone();
-  url.pathname = redirectUrl.pathname;
-  url.search = redirectUrl.search;
-  url.hash = redirectUrl.hash;
-
-  return redirectWithCookies(url, supabaseResponse);
+  return redirectWithCookies(
+    withLoginIntro(createSuccessUrl(request, next)),
+    supabaseResponse,
+  );
 }
