@@ -1,0 +1,67 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+
+import {
+  createErrorUrl,
+  redirectWithCookies,
+} from "@/lib/auth-helpers";
+import { validateRedirectUrl } from "@/lib/utils";
+import { DEFAULT_LOGGED_IN_PAGE } from "@/lib/constants/auth";
+
+/**
+ * Exchanges an auth code for a session (OAuth or email links).
+ */
+export async function GET(request: NextRequest) {
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get("code");
+  const next = searchParams.get("next");
+
+  if (!code) {
+    return NextResponse.redirect(createErrorUrl(request, "No code provided"));
+  }
+
+  let supabaseResponse = NextResponse.next({
+    request,
+  });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value);
+          });
+          supabaseResponse = NextResponse.next({
+            request,
+          });
+          cookiesToSet.forEach(({ name, value, options }) => {
+            supabaseResponse.cookies.set(name, value, options);
+          });
+        },
+      },
+    },
+  );
+
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) {
+    return redirectWithCookies(
+      createErrorUrl(request, error.message),
+      supabaseResponse,
+    );
+  }
+
+  const validatedNext = validateRedirectUrl(next, origin);
+  const redirectTo = validatedNext ?? DEFAULT_LOGGED_IN_PAGE;
+  const redirectUrl = new URL(redirectTo, origin);
+  const url = request.nextUrl.clone();
+  url.pathname = redirectUrl.pathname;
+  url.search = redirectUrl.search;
+  url.hash = redirectUrl.hash;
+
+  return redirectWithCookies(url, supabaseResponse);
+}

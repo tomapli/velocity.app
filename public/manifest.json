@@ -1,0 +1,23 @@
+{
+  "name": "App",
+  "short_name": "App",
+  "description": "Next.js + Supabase starter with live data.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fcfff7",
+  "theme_color": "#b31b1b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity"],
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/",
+  "id": "app"
+}
