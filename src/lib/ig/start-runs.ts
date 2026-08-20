@@ -7,6 +7,7 @@ import {
   startActorRun,
 } from "@/lib/apify/client";
 import {
+  getInstagramShortcode,
   instagramProfileDirectUrl,
   toApifyDateFilter,
 } from "@/lib/apify/instagram-listing";
@@ -63,6 +64,10 @@ export async function startDetailsBatchForGroup(
 
   if (groupError) {
     throw groupError;
+  }
+
+  if (hasInFlightDetailsScrape(groupScrapes ?? [])) {
+    return null;
   }
 
   const listingScrapes = (groupScrapes ?? []).filter(
@@ -146,8 +151,13 @@ export function shouldContinueDetails(params: {
   detailedPostCount: number;
   requestedPostCount: number | null;
   batchHadOlderPost: boolean;
+  batchUpdatedCount: number;
 }): boolean {
   if (params.batchHadOlderPost || params.pendingUrlCount <= 0) {
+    return false;
+  }
+
+  if (params.batchUpdatedCount <= 0) {
     return false;
   }
 
@@ -159,6 +169,12 @@ export function shouldContinueDetails(params: {
   }
 
   return true;
+}
+
+export function hasInFlightDetailsScrape(scrapes: ScheduledScrape[]): boolean {
+  return scrapes.some(
+    (scrape) => scrape.scrape_type === "post_details" && scrape.finished_at == null,
+  );
 }
 
 export function listingScrapesAreSettled(scrapes: ScheduledScrape[]): boolean {
@@ -173,9 +189,9 @@ async function countDetailedPosts(
   supabase: AppSupabase,
   listingIds: string[],
 ): Promise<number> {
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from("ig_posts")
-    .select("id", { count: "exact", head: true })
+    .select("post_url")
     .in("source_scrape_id", listingIds)
     .not("details_scrape_id", "is", null);
 
@@ -183,7 +199,7 @@ async function countDetailedPosts(
     throw error;
   }
 
-  return count ?? 0;
+  return countUniqueShortcodes((data ?? []).map((post) => post.post_url));
 }
 
 async function listPendingPostUrls(
@@ -205,6 +221,8 @@ async function listPendingPostUrls(
 
   const sinceTimestamp = sinceWhen ? Date.parse(sinceWhen) : null;
 
+  const seenShortcodes = new Set<string>();
+
   return (data ?? [])
     .filter((post) => {
       if (!sinceTimestamp || !post.uploaded_at) {
@@ -213,6 +231,15 @@ async function listPendingPostUrls(
 
       const uploadedAt = Date.parse(post.uploaded_at);
       return !Number.isFinite(uploadedAt) || uploadedAt >= sinceTimestamp;
+    })
+    .filter((post) => {
+      const shortcode = getInstagramShortcode(post.post_url);
+      if (!shortcode || seenShortcodes.has(shortcode)) {
+        return false;
+      }
+
+      seenShortcodes.add(shortcode);
+      return true;
     })
     .slice(0, limit);
 }
@@ -226,4 +253,17 @@ function getRemainingDetailSlots(
   }
 
   return Math.max(0, template.requested_post_count - detailedPostCount);
+}
+
+function countUniqueShortcodes(postUrls: string[]): number {
+  const shortcodes = new Set<string>();
+
+  for (const postUrl of postUrls) {
+    const shortcode = getInstagramShortcode(postUrl);
+    if (shortcode) {
+      shortcodes.add(shortcode);
+    }
+  }
+
+  return shortcodes.size;
 }

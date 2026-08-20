@@ -10,6 +10,7 @@ describe("shouldContinueDetails", () => {
         detailedPostCount: 100,
         requestedPostCount: 240,
         batchHadOlderPost: false,
+        batchUpdatedCount: 12,
       }),
     ).toBe(true);
   });
@@ -21,6 +22,7 @@ describe("shouldContinueDetails", () => {
         detailedPostCount: 240,
         requestedPostCount: 240,
         batchHadOlderPost: false,
+        batchUpdatedCount: 12,
       }),
     ).toBe(false);
     expect(
@@ -29,6 +31,7 @@ describe("shouldContinueDetails", () => {
         detailedPostCount: 100,
         requestedPostCount: null,
         batchHadOlderPost: true,
+        batchUpdatedCount: 12,
       }),
     ).toBe(false);
     expect(
@@ -37,6 +40,19 @@ describe("shouldContinueDetails", () => {
         detailedPostCount: 12,
         requestedPostCount: null,
         batchHadOlderPost: false,
+        batchUpdatedCount: 12,
+      }),
+    ).toBe(false);
+  });
+
+  it("stops when a batch imports zero posts", () => {
+    expect(
+      shouldContinueDetails({
+        pendingUrlCount: 40,
+        detailedPostCount: 100,
+        requestedPostCount: 240,
+        batchHadOlderPost: false,
+        batchUpdatedCount: 0,
       }),
     ).toBe(false);
   });

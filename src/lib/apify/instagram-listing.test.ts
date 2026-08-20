@@ -104,6 +104,22 @@ describe("mapInstagramPostDetails", () => {
       description: "A caption",
     });
   });
+
+  it("accepts a null caption from Apify output", () => {
+    expect(
+      mapInstagramPostDetails({
+        code: "DLcNbiWM15K",
+        product_type: "clips",
+        is_video: true,
+        taken_at_date: "2025-06-28T10:16:23+00:00",
+        caption: null,
+        thumbnail_url: "https://example.com/thumbnail.jpg",
+      }),
+    ).toMatchObject({
+      post_url: "https://www.instagram.com/reel/DLcNbiWM15K/",
+      description: null,
+    });
+  });
 });
 
 describe("mapInstagramDetailsProfile", () => {

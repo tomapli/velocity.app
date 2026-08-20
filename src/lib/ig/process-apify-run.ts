@@ -12,6 +12,7 @@ import {
   mapInstagramPostDetails,
 } from "@/lib/apify/instagram-post-details";
 import {
+  hasInFlightDetailsScrape,
   listingScrapesAreSettled,
   shouldContinueDetails,
   startDetailsBatchForGroup,
@@ -115,9 +116,16 @@ export async function advanceApifyGroupPipeline(
   groupId: string,
   scrape?: ScheduledScrape,
   batchHadOlderPost = false,
+  batchUpdatedCount = 0,
 ): Promise<{ startedDetails?: boolean; continued?: boolean }> {
   if (scrape?.scrape_type === "post_details") {
-    const continued = await maybeContinueDetails(admin, token, scrape, batchHadOlderPost);
+    const continued = await maybeContinueDetails(
+      admin,
+      token,
+      scrape,
+      batchHadOlderPost,
+      batchUpdatedCount,
+    );
     return { continued };
   }
 
@@ -200,11 +208,18 @@ async function importDetails(
     throw existingError;
   }
 
-  const byShortcode = new Map(
-    (existing ?? [])
-      .map((post) => [getInstagramShortcode(post.post_url), post.id] as const)
-      .filter((entry): entry is readonly [string, string] => entry[0] != null),
-  );
+  const byShortcode = new Map<string, string[]>();
+
+  for (const post of existing ?? []) {
+    const shortcode = getInstagramShortcode(post.post_url);
+    if (!shortcode) {
+      continue;
+    }
+
+    const ids = byShortcode.get(shortcode) ?? [];
+    ids.push(post.id);
+    byShortcode.set(shortcode, ids);
+  }
 
   const sinceTimestamp = scrape.since_when ? Date.parse(scrape.since_when) : null;
   let updatedCount = 0;
@@ -217,8 +232,8 @@ async function importDetails(
     }
 
     const shortcode = getInstagramShortcode(details.post_url);
-    const postId = shortcode ? byShortcode.get(shortcode) : undefined;
-    if (!postId) {
+    const postIds = shortcode ? byShortcode.get(shortcode) : undefined;
+    if (!postIds?.length) {
       continue;
     }
 
@@ -228,18 +243,20 @@ async function importDetails(
       continue;
     }
 
-    const { error } = await admin
-      .from("ig_posts")
-      .update({
-        ...details,
-        details_scrape_id: scrape.id,
-      })
-      .eq("id", postId);
-    if (error) {
-      throw error;
-    }
+    for (const postId of postIds) {
+      const { error } = await admin
+        .from("ig_posts")
+        .update({
+          ...details,
+          details_scrape_id: scrape.id,
+        })
+        .eq("id", postId);
+      if (error) {
+        throw error;
+      }
 
-    updatedCount += 1;
+      updatedCount += 1;
+    }
   }
 
   const profileUpdate = dataset
@@ -274,11 +291,7 @@ async function maybeStartDetails(
   if (!listingScrapesAreSettled(scrapes ?? [])) {
     return false;
   }
-  if (
-    (scrapes ?? []).some(
-      (scrape) => scrape.scrape_type === "post_details" && scrape.finished_at == null,
-    )
-  ) {
+  if (hasInFlightDetailsScrape(scrapes ?? [])) {
     return false;
   }
 
@@ -291,6 +304,7 @@ async function maybeContinueDetails(
   token: string,
   scrape: ScheduledScrape,
   batchHadOlderPost: boolean,
+  batchUpdatedCount: number,
 ): Promise<boolean> {
   const { data: scrapes, error } = await admin
     .from("scheduled_scrapes")
@@ -299,6 +313,10 @@ async function maybeContinueDetails(
 
   if (error) {
     throw error;
+  }
+
+  if (hasInFlightDetailsScrape(scrapes ?? [])) {
+    return false;
   }
 
   const listingIds = (scrapes ?? [])
@@ -328,6 +346,7 @@ async function maybeContinueDetails(
       detailedPostCount: detailedCount ?? 0,
       requestedPostCount: scrape.requested_post_count,
       batchHadOlderPost,
+      batchUpdatedCount,
     })
   ) {
     return false;

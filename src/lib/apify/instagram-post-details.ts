@@ -48,7 +48,7 @@ const ApifyMetricsSchema = z
 
 export const ApifyInstagramPostDetailsSchema = z
   .object({
-    caption: z.union([ApifyCaptionSchema, z.string()]).optional(),
+    caption: z.union([ApifyCaptionSchema, z.string()]).nullable().optional(),
     carousel_media: z.array(ApifyMediaSchema).optional(),
     code: z.string().min(1).optional(),
     comment_count: z.number().int().nonnegative().optional(),

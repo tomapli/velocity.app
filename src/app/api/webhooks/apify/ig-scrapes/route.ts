@@ -90,6 +90,7 @@ export async function POST(request: Request) {
     scrape.group_id,
     scrape,
     result.batchHadOlderPost ?? false,
+    result.importedPostCount ?? 0,
   );
 
   return NextResponse.json({
