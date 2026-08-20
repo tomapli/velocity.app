@@ -33,6 +33,74 @@ export type Database = {
         }
         Relationships: []
       }
+      ig_posts: {
+        Row: {
+          carousel_image_urls: string[] | null
+          comment_count: number | null
+          created_at: string
+          description: string | null
+          first_frame_url: string | null
+          id: string
+          ig_scrape_id: string
+          like_count: number | null
+          media_type: Database["public"]["Enums"]["ig_post_media_type"]
+          post_url: string
+          save_count: number | null
+          share_count: number | null
+          thumbnail_url: string | null
+          uploaded_at: string
+          video_embed_url: string | null
+          video_length_secs: number | null
+          view_count: number | null
+        }
+        Insert: {
+          carousel_image_urls?: string[] | null
+          comment_count?: number | null
+          created_at?: string
+          description?: string | null
+          first_frame_url?: string | null
+          id?: string
+          ig_scrape_id: string
+          like_count?: number | null
+          media_type: Database["public"]["Enums"]["ig_post_media_type"]
+          post_url: string
+          save_count?: number | null
+          share_count?: number | null
+          thumbnail_url?: string | null
+          uploaded_at: string
+          video_embed_url?: string | null
+          video_length_secs?: number | null
+          view_count?: number | null
+        }
+        Update: {
+          carousel_image_urls?: string[] | null
+          comment_count?: number | null
+          created_at?: string
+          description?: string | null
+          first_frame_url?: string | null
+          id?: string
+          ig_scrape_id?: string
+          like_count?: number | null
+          media_type?: Database["public"]["Enums"]["ig_post_media_type"]
+          post_url?: string
+          save_count?: number | null
+          share_count?: number | null
+          thumbnail_url?: string | null
+          uploaded_at?: string
+          video_embed_url?: string | null
+          video_length_secs?: number | null
+          view_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_posts_ig_scrape_id_fkey"
+            columns: ["ig_scrape_id"]
+            isOneToOne: false
+            referencedRelation: "ig_scrapes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ig_scrapes: {
         Row: {
           created_at: string
@@ -117,7 +185,7 @@ export type Database = {
       extract_auth_user_picture: { Args: { meta: Json }; Returns: string }
     }
     Enums: {
-      [_ in never]: never
+      ig_post_media_type: "carousel" | "short" | "static"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -244,7 +312,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      ig_post_media_type: ["carousel", "short", "static"],
+    },
   },
 } as const
 
