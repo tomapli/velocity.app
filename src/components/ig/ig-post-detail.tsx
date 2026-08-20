@@ -27,6 +27,7 @@ interface IgPostDetailProps {
  */
 export function IgPostDetail({ username, profile, post }: IgPostDetailProps) {
   const metrics = getIgPostMetrics(post);
+  const mediaAspectClass = post.media_type === "short" ? "aspect-[9/16]" : "aspect-square";
   const scored = [
     { label: "Video length", value: metrics.videoLength, hint: "Entertainment 5–40s · educational 25–60s" },
     { label: "Description length", value: metrics.descriptionLengthScore, hint: "≈ 300–700 characters" },
@@ -74,40 +75,35 @@ export function IgPostDetail({ username, profile, post }: IgPostDetailProps) {
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        <Card className="overflow-hidden rounded-2xl py-0 shadow-sm">
-          <CardContent className="p-0">
-            {post.video_embed_url ? (
-              <video
-                src={post.video_embed_url}
-                controls
-                playsInline
-                poster={post.thumbnail_url ?? post.first_frame_url ?? undefined}
-                className="aspect-[9/16] max-h-[70vh] w-full bg-foreground object-contain"
-              >
-                <track kind="captions" />
-              </video>
-            ) : (
-              <IgRemoteImage
-                src={post.thumbnail_url ?? post.first_frame_url}
-                alt=""
-                className="aspect-[4/5] w-full"
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          {post.thumbnail_url ? (
-            <MediaTile label="Thumbnail" src={post.thumbnail_url} />
-          ) : null}
-          {post.first_frame_url ? (
-            <MediaTile label="First frame" src={post.first_frame_url} />
-          ) : null}
-          {post.carousel_image_urls?.map((url, index) => (
-            <MediaTile key={url} label={`Slide ${index + 1}`} src={url} />
-          ))}
-        </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {post.video_embed_url ? (
+          <MediaTile
+            label="Video"
+            aspectClass={mediaAspectClass}
+            videoSrc={post.video_embed_url}
+            poster={post.thumbnail_url ?? post.first_frame_url ?? undefined}
+          />
+        ) : (
+          <MediaTile
+            label="Preview"
+            src={post.thumbnail_url ?? post.first_frame_url}
+            aspectClass={post.media_type === "short" ? "aspect-[9/16]" : "aspect-[4/5]"}
+          />
+        )}
+        {post.thumbnail_url ? (
+          <MediaTile label="Thumbnail" src={post.thumbnail_url} aspectClass={mediaAspectClass} />
+        ) : null}
+        {post.first_frame_url ? (
+          <MediaTile label="First frame" src={post.first_frame_url} aspectClass={mediaAspectClass} />
+        ) : null}
+        {post.carousel_image_urls?.map((url, index) => (
+          <MediaTile
+            key={url}
+            label={`Slide ${index + 1}`}
+            src={url}
+            aspectClass={mediaAspectClass}
+          />
+        ))}
       </div>
 
       {counts.length > 0 ? (
@@ -164,10 +160,34 @@ export function IgPostDetail({ username, profile, post }: IgPostDetailProps) {
   );
 }
 
-function MediaTile({ label, src }: { label: string; src: string }) {
+function MediaTile({
+  label,
+  src,
+  aspectClass,
+  videoSrc,
+  poster,
+}: {
+  label: string;
+  aspectClass: string;
+  src?: string | null;
+  videoSrc?: string;
+  poster?: string;
+}) {
   return (
     <figure className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <IgRemoteImage src={src} alt="" className="aspect-square w-full" />
+      {videoSrc ? (
+        <video
+          src={videoSrc}
+          controls
+          playsInline
+          poster={poster}
+          className={`${aspectClass} w-full object-cover`}
+        >
+          <track kind="captions" />
+        </video>
+      ) : (
+        <IgRemoteImage src={src ?? null} alt="" className={`${aspectClass} w-full`} />
+      )}
       <figcaption className="px-3 py-2 text-xs text-muted-foreground">{label}</figcaption>
     </figure>
   );

@@ -14,11 +14,26 @@ const ApifyImageVersionSchema = z
   })
   .passthrough();
 
+const ApifyImageVersionsSchema = z
+  .object({
+    items: z.array(ApifyImageVersionSchema).optional(),
+    additional_items: z
+      .object({
+        first_frame: z
+          .union([
+            ApifyImageVersionSchema,
+            z.array(ApifyImageVersionSchema),
+            z.object({ items: z.array(ApifyImageVersionSchema).optional() }),
+          ])
+          .optional(),
+      })
+      .optional(),
+  })
+  .passthrough();
+
 const ApifyMediaSchema = z
   .object({
-    image_versions: z
-      .object({ items: z.array(ApifyImageVersionSchema).optional() })
-      .optional(),
+    image_versions: ApifyImageVersionsSchema.optional(),
     thumbnail_url: z.string().url().optional(),
     video_url: z.string().url().optional(),
   })
@@ -52,9 +67,7 @@ export const ApifyInstagramPostDetailsSchema = z
     carousel_media: z.array(ApifyMediaSchema).optional(),
     code: z.string().min(1).optional(),
     comment_count: z.number().int().nonnegative().optional(),
-    image_versions: z
-      .object({ items: z.array(ApifyImageVersionSchema).optional() })
-      .optional(),
+    image_versions: ApifyImageVersionsSchema.optional(),
     is_video: z.boolean().optional(),
     like_count: z.number().int().nonnegative().optional(),
     media_type: z.number().int().optional(),
@@ -107,7 +120,7 @@ export function mapInstagramPostDetails(
     return null;
   }
 
-  const firstFrameUrl = post.image_versions?.items?.[0]?.url ?? null;
+  const firstFrameUrl = getFirstFrameUrl(post.image_versions);
   const carouselImageUrls = post.carousel_media
     ?.map(
       (media) =>
@@ -157,6 +170,28 @@ export function mapInstagramDetailsProfile(
     ig_name: user?.full_name ?? null,
     description: user?.biography ?? null,
   };
+}
+
+/**
+ * Reads the video first-frame URL from the post-details actor payload.
+ */
+function getFirstFrameUrl(
+  imageVersions: z.infer<typeof ApifyImageVersionsSchema> | undefined,
+): string | null {
+  const firstFrame = imageVersions?.additional_items?.first_frame;
+  if (!firstFrame) {
+    return null;
+  }
+
+  if (Array.isArray(firstFrame)) {
+    return firstFrame[0]?.url ?? null;
+  }
+
+  if ("items" in firstFrame && Array.isArray(firstFrame.items)) {
+    return firstFrame.items[0]?.url ?? null;
+  }
+
+  return firstFrame.url ?? null;
 }
 
 function getCaptionText(

@@ -73,7 +73,12 @@ describe("mapInstagramPostDetails", () => {
       ],
       code: "ABC123",
       comment_count: 12,
-      image_versions: { items: [{ url: "https://example.com/frame.jpg" }] },
+      image_versions: {
+        additional_items: {
+          first_frame: { url: "https://example.com/frame.jpg" },
+        },
+        items: [{ url: "https://example.com/cover.jpg" }],
+      },
       is_video: true,
       like_count: 45,
       metrics: {
@@ -102,6 +107,24 @@ describe("mapInstagramPostDetails", () => {
       comment_count: 12,
       like_count: 45,
       description: "A caption",
+    });
+  });
+
+  it("prefers additional_items.first_frame over image_versions.items", () => {
+    expect(
+      mapInstagramPostDetails({
+        code: "ABC123",
+        is_video: true,
+        taken_at_date: "2026-08-20T10:00:00+00:00",
+        image_versions: {
+          additional_items: {
+            first_frame: [{ url: "https://example.com/first-frame.jpg" }],
+          },
+          items: [{ url: "https://example.com/cover.jpg" }],
+        },
+      }),
+    ).toMatchObject({
+      first_frame_url: "https://example.com/first-frame.jpg",
     });
   });
 
