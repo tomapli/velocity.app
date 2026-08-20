@@ -4,10 +4,10 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * TAP Brand Colors
- * Primary Red: #b31b1b
- * White: #fcfff7
- * Brown: #2c1a1d
+ * Velocity brand colors (from Typografie.dc.html)
+ * Bedrock: #0b0b0b — backgrounds, bold text, logos
+ * Signal:  #f1f0ef — high-contrast restful surfaces
+ * Voltage: #cbff1e — accent, icons, controls
  *
  * Theme tokens hold raw OKLCH values and are exposed to Tailwind via the
  * direct `@theme inline` mapping (current shadcn / Tailwind v4 convention),
@@ -68,75 +68,76 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* TAP Brand Colors (direct access) */
-  --color-tap-red: oklch(0.493 0.186 27.5); /* #b31b1b */
-  --color-tap-white: oklch(0.996 0.011 123.5); /* #fcfff7 */
-  --color-tap-brown: oklch(0.243 0.029 8.5); /* #2c1a1d */
+  /* Velocity brand colors (direct access) */
+  --color-bedrock: var(--bedrock);
+  --color-signal: var(--signal);
+  --color-voltage: var(--voltage);
 
-  /* TAP Brand Typography (wired to next/font variables from app/layout.tsx) */
+  /* Brand typography (wired to next/font variables from app/layout.tsx) */
   --font-sans: var(--font-roboto), system-ui, sans-serif;
   --font-heading: var(--font-poppins), system-ui, sans-serif;
   --font-body: var(--font-roboto), system-ui, sans-serif;
   --font-quote: var(--font-pacifico), cursive;
 }
 
-/* TAP Brand Colors - Light Theme */
+/* Velocity brand colors — Light Theme */
 :root {
   --radius: 0.5rem;
 
-  --background: oklch(0.995 0.014 121.7); /* TAP White #fcfff7 */
-  --foreground: oklch(0.245 0.03 8.6); /* TAP Brown #2c1a1d */
+  --bedrock: oklch(0.15 0 89.9); /* #0b0b0b */
+  --signal: oklch(0.956 0.002 67.8); /* #f1f0ef */
+  --voltage: oklch(0.931 0.225 123.5); /* #cbff1e */
 
-  --card: oklch(0.995 0.014 121.7); /* TAP White */
-  --card-foreground: oklch(0.245 0.03 8.6); /* TAP Brown */
+  --background: var(--signal);
+  --foreground: var(--bedrock);
 
-  --popover: oklch(1 0 0); /* Pure White */
-  --popover-foreground: oklch(0.245 0.03 8.6); /* TAP Brown */
+  --card: oklch(1 0 0);
+  --card-foreground: var(--bedrock);
 
-  --primary: oklch(0.484 0.184 27.7); /* TAP Red #b31b1b */
-  --primary-foreground: oklch(1 0 0); /* White */
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--bedrock);
 
-  --secondary: oklch(0.303 0.041 8.9); /* Lighter TAP Brown */
-  --secondary-foreground: oklch(0.995 0.014 121.7); /* TAP White */
+  --primary: var(--voltage);
+  --primary-foreground: var(--bedrock);
 
-  --muted: oklch(0.967 0.007 121.6); /* Very light warm gray */
-  --muted-foreground: oklch(0.393 0.057 9.2); /* Medium TAP Brown */
+  --secondary: var(--bedrock);
+  --secondary-foreground: var(--signal);
 
-  --accent: oklch(0.946 0.015 76.6); /* Soft warm tint (subtle hover/highlight) */
-  --accent-foreground: oklch(0.245 0.03 8.6); /* TAP Brown */
+  --muted: oklch(0.914 0.002 67.8); /* #e3e2e1 */
+  --muted-foreground: oklch(0.474 0.005 106.6); /* #5c5c59 */
 
-  --destructive: oklch(0.581 0.223 27.9); /* Destructive red */
+  --accent: oklch(0.946 0.055 116.9); /* Pale Voltage wash */
+  --accent-foreground: var(--bedrock);
+
+  --destructive: oklch(0.5 0.155 24.7); /* #aa3333 */
   --destructive-foreground: oklch(1 0 0);
 
-  --success: oklch(0.6 0.14 145); /* Positive/available status */
+  --success: oklch(0.58 0.13 134); /* Olive surface, Voltage-adjacent */
   --success-foreground: oklch(1 0 0);
-  /* Text-safe darkened variant of --success: clears WCAG AA 4.5:1 for
-     normal text (--success itself is a surface/accent tone at ~3.7:1 on
-     --background, and only ~4.4:1 on its own bg-success/10 tint, and is
-     not safe as a standalone text color). ~5.2:1 on bg-success/10,
-     ~5.8:1 on --background. */
-  --success-strong: oklch(0.489 0.14 145);
-  --warning: oklch(0.758 0.152 69.3); /* Same hue as --chart-2 Amber */
-  --warning-foreground: oklch(0.145 0 0);
-  /* Text-safe darkened variant of --warning: --warning itself is only
-     ~2.2:1 on --background. ~5.4:1 on bg-warning/10, ~5.9:1 on
-     --background. */
-  --warning-strong: oklch(0.51 0.152 69.3);
+  /* Text-safe darkened variant of --success (#3f6b1a). --success itself is
+     a surface/accent tone (~3.6:1 on --background) and is not safe as a
+     standalone text color. ~5.6:1 on --background. */
+  --success-strong: oklch(0.478 0.12 133.9);
+  --warning: oklch(0.758 0.152 80.1); /* Same hue as --chart-2 Amber */
+  --warning-foreground: var(--bedrock);
+  /* Text-safe darkened variant of --warning (#8a6416). --warning itself is
+     not text-safe on --background. ~4.7:1 on --background. */
+  --warning-strong: oklch(0.529 0.101 80.1);
   --info: oklch(0.635 0.089 195.1); /* Same hue as --chart-3 Teal */
   --info-foreground: oklch(1 0 0);
 
-  --border: oklch(0.877 0.013 5.8); /* Light warm border */
-  --input: oklch(0.918 0.008 5.7); /* Light input background */
-  --ring: oklch(0.484 0.184 27.7); /* TAP Red for focus rings */
+  --border: oklch(0.904 0.004 91.4); /* #e0dfdc */
+  --input: oklch(0.9 0.002 67.8); /* #dfdedd */
+  /* Voltage on Signal is ~1:1, so light-mode focus uses Bedrock. */
+  --ring: var(--bedrock);
 
   /* Chart Colors - distinct hues for categorical data */
-  --chart-1: oklch(0.537 0.206 27.8); /* TAP Red */
-  --chart-2: oklch(0.758 0.152 69.3); /* Amber */
+  --chart-1: var(--voltage);
+  --chart-2: oklch(0.758 0.152 80.1); /* Amber */
   /* Text-safe darkened variant, same hue as --chart-2 — used when chart-2
      is a text color (e.g. role badges) rather than a surface/bg accent.
-     ~5.2:1 on bg-chart-2/15, ~5.9:1 on --background. Same value as
-     --warning-strong (chart-2 and warning share a hue). */
-  --chart-2-strong: oklch(0.51 0.152 69.3);
+     Same value as --warning-strong (chart-2 and warning share a hue). */
+  --chart-2-strong: oklch(0.529 0.101 80.1);
   --chart-3: oklch(0.635 0.089 195.1); /* Teal */
   /* Text-safe darkened variant, same hue as --chart-3. ~5.1:1 on
      bg-chart-3/15, ~6.0:1 on --background. */
@@ -145,78 +146,78 @@
   --chart-5: oklch(0.554 0.16 287.7); /* Violet */
 
   /* Sidebar */
-  --sidebar: oklch(0.985 0.01 121.7);
-  --sidebar-foreground: oklch(0.245 0.03 8.6);
-  --sidebar-primary: oklch(0.484 0.184 27.7);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.946 0.015 76.6);
-  --sidebar-accent-foreground: oklch(0.245 0.03 8.6);
-  --sidebar-border: oklch(0.877 0.013 5.8);
-  --sidebar-ring: oklch(0.484 0.184 27.7);
+  --sidebar: oklch(0.97 0.002 67.8);
+  --sidebar-foreground: var(--bedrock);
+  --sidebar-primary: var(--voltage);
+  --sidebar-primary-foreground: var(--bedrock);
+  --sidebar-accent: oklch(0.946 0.055 116.9);
+  --sidebar-accent-foreground: var(--bedrock);
+  --sidebar-border: oklch(0.904 0.004 91.4);
+  --sidebar-ring: var(--bedrock);
 }
 
-/* TAP Brand Colors - Dark Theme */
+/* Velocity brand colors — Dark Theme */
 .dark {
-  --background: oklch(0.184 0.018 8); /* Darker TAP Brown */
-  --foreground: oklch(0.995 0.014 121.7); /* TAP White */
+  --background: var(--bedrock);
+  --foreground: var(--signal);
 
-  --card: oklch(0.225 0.026 8.4); /* Dark TAP Brown card */
-  --card-foreground: oklch(0.995 0.014 121.7); /* TAP White */
+  --card: oklch(0.218 0 89.9); /* #1a1a1a */
+  --card-foreground: var(--signal);
 
-  --popover: oklch(0.205 0.022 8.2); /* Dark popover */
-  --popover-foreground: oklch(0.995 0.014 121.7); /* TAP White */
+  --popover: oklch(0.2 0 89.9); /* #161616 */
+  --popover-foreground: var(--signal);
 
-  --primary: oklch(0.537 0.206 27.8); /* TAP Red (brightened for dark) */
-  --primary-foreground: oklch(1 0 0);
+  --primary: var(--voltage);
+  --primary-foreground: var(--bedrock);
 
-  --secondary: oklch(0.284 0.037 8.8); /* Medium dark TAP Brown */
-  --secondary-foreground: oklch(0.995 0.014 121.7); /* TAP White */
+  --secondary: oklch(0.226 0 89.9); /* #1c1c1c */
+  --secondary-foreground: var(--signal);
 
-  --muted: oklch(0.255 0.032 8.7); /* Muted dark brown */
-  --muted-foreground: oklch(0.749 0.027 6.4); /* Light brown text */
+  --muted: oklch(0.226 0 89.9); /* #1c1c1c */
+  --muted-foreground: oklch(0.715 0.004 106.5); /* #a3a3a0 */
 
-  --accent: oklch(0.325 0.034 8.1); /* Subtle elevated brown (hover/highlight) */
-  --accent-foreground: oklch(0.995 0.014 121.7); /* TAP White */
+  --accent: oklch(0.282 0.051 120.7); /* Voltage on Bedrock */
+  --accent-foreground: var(--signal);
 
-  --destructive: oklch(0.602 0.21 26.3); /* Destructive red */
+  --destructive: oklch(0.602 0.21 26.3);
   --destructive-foreground: oklch(1 0 0);
 
-  --success: oklch(0.72 0.15 145); /* Brightened for dark, same pattern as --primary/--destructive above */
-  --success-foreground: oklch(1 0 0);
-  /* Dark mode already clears WCAG AA (~8:1) as plain --success, so the
+  --success: oklch(0.76 0.14 134);
+  --success-foreground: var(--bedrock);
+  /* Dark mode already clears WCAG AA as plain --success, so the
      text-safe variant is identical here — only light mode needs darkening. */
-  --success-strong: oklch(0.72 0.15 145);
-  --warning: oklch(0.792 0.137 72.4); /* Same hue as dark --chart-2 */
-  --warning-foreground: oklch(0.145 0 0);
-  /* Dark mode already clears WCAG AA (~9.6:1) as plain --warning. */
-  --warning-strong: oklch(0.792 0.137 72.4);
+  --success-strong: oklch(0.76 0.14 134);
+  --warning: oklch(0.792 0.137 80.1); /* Same hue as dark --chart-2 */
+  --warning-foreground: var(--bedrock);
+  /* Dark mode already clears WCAG AA as plain --warning. */
+  --warning-strong: oklch(0.792 0.137 80.1);
   --info: oklch(0.761 0.103 195.2); /* Same hue as dark --chart-3 */
   --info-foreground: oklch(1 0 0);
 
-  --border: oklch(0.303 0.041 8.9); /* Dark border */
-  --input: oklch(0.265 0.034 8.7); /* Dark input */
-  --ring: oklch(0.537 0.206 27.8); /* TAP Red for focus rings */
+  --border: oklch(0.285 0 89.9); /* #2a2a2a */
+  --input: oklch(0.252 0 89.9); /* #222222 */
+  --ring: var(--voltage);
 
   /* Chart Colors - distinct hues for categorical data */
-  --chart-1: oklch(0.631 0.192 24.5); /* TAP Red */
-  --chart-2: oklch(0.792 0.137 72.4); /* Amber */
-  /* Dark mode already clears WCAG AA (~9.6:1) as plain --chart-2. */
-  --chart-2-strong: oklch(0.792 0.137 72.4);
+  --chart-1: var(--voltage);
+  --chart-2: oklch(0.792 0.137 80.1); /* Amber */
+  /* Dark mode already clears WCAG AA as plain --chart-2. */
+  --chart-2-strong: oklch(0.792 0.137 80.1);
   --chart-3: oklch(0.761 0.103 195.2); /* Teal */
-  /* Dark mode already clears WCAG AA (~9.1:1) as plain --chart-3. */
+  /* Dark mode already clears WCAG AA as plain --chart-3. */
   --chart-3-strong: oklch(0.761 0.103 195.2);
   --chart-4: oklch(0.704 0.158 327.1); /* Magenta */
   --chart-5: oklch(0.653 0.132 289.9); /* Violet */
 
   /* Sidebar */
-  --sidebar: oklch(0.205 0.022 8.2);
-  --sidebar-foreground: oklch(0.995 0.014 121.7);
-  --sidebar-primary: oklch(0.537 0.206 27.8);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.325 0.034 8.1);
-  --sidebar-accent-foreground: oklch(0.995 0.014 121.7);
-  --sidebar-border: oklch(0.303 0.041 8.9);
-  --sidebar-ring: oklch(0.537 0.206 27.8);
+  --sidebar: oklch(0.192 0 89.9); /* #141414 */
+  --sidebar-foreground: var(--signal);
+  --sidebar-primary: var(--voltage);
+  --sidebar-primary-foreground: var(--bedrock);
+  --sidebar-accent: oklch(0.282 0.051 120.7);
+  --sidebar-accent-foreground: var(--signal);
+  --sidebar-border: oklch(0.285 0 89.9);
+  --sidebar-ring: var(--voltage);
 }
 
 @layer base {
@@ -229,7 +230,12 @@
     font-family: var(--font-body);
   }
 
-  /* TAP Brand Typography Classes */
+  ::selection {
+    background: var(--voltage);
+    color: var(--bedrock);
+  }
+
+  /* Brand typography classes */
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
     font-weight: 700; /* Bold as per brand guidelines */

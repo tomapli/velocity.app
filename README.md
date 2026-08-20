@@ -1,15 +1,15 @@
-<div align="center" style="background: #fcfff7; padding: 2rem 1rem; border-radius: 16px;">
-  <h1 style="font-family: Poppins, sans-serif; color: #b31b1b; font-weight: 800; font-size: 2.5rem; margin: 0.5rem 0;">
+<div align="center" style="background: #f1f0ef; padding: 2rem 1rem; border-radius: 16px;">
+  <h1 style="font-family: Poppins, sans-serif; color: #0b0b0b; font-weight: 800; font-size: 2.5rem; margin: 0.5rem 0;">
     Velocitapp
   </h1>
 
-  <p style="font-family: Roboto, sans-serif; color: #555; font-size: 1rem; max-width: 480px; margin: 0.5rem auto;">
+  <p style="font-family: Roboto, sans-serif; color: #5c5c59; font-size: 1rem; max-width: 480px; margin: 0.5rem auto;">
     All-in-one web app for teams — room booking, essay bank, and authentication.
   </p>
 
-  <p style="font-family: Roboto, sans-serif; color: #2c1a1d; font-size: 0.85rem; margin-top: 1.5rem;">
+  <p style="font-family: Roboto, sans-serif; color: #0b0b0b; font-size: 0.85rem; margin-top: 1.5rem;">
     Made with ❤️ by
-    <a href="https://www.linkedin.com/in/tomprotiva/" style="color: #b31b1b; text-decoration: none;">Tomáš Protiva</a>
+    <a href="https://www.linkedin.com/in/tomprotiva/" style="color: #0b0b0b; text-decoration: none;">Tomáš Protiva</a>
   </p>
 </div>
 

@@ -2,22 +2,22 @@
 name: App
 description: shadcn/ui (new-york) + Tailwind v4 + next-themes. Tokens here mirror src/app/globals.css (light values; dark theme lives there too).
 colors:
-  primary: "#b31b1b"
-  primary-foreground: "#ffffff"
-  background: "#fcfff7"
-  foreground: "#2c1a1d"
-  secondary: "#2c1a1d"
-  muted: "oklch(0.967 0.007 121.6)"
-  accent: "oklch(0.946 0.015 76.6)"
-  destructive: "oklch(0.581 0.223 27.9)"
-  success: "oklch(0.6 0.14 145)"
-  success-strong: "oklch(0.489 0.14 145)"
-  warning: "oklch(0.758 0.152 69.3)"
-  warning-strong: "oklch(0.51 0.152 69.3)"
+  primary: "#cbff1e"
+  primary-foreground: "#0b0b0b"
+  background: "#f1f0ef"
+  foreground: "#0b0b0b"
+  secondary: "#0b0b0b"
+  muted: "#e3e2e1"
+  accent: "#eaf3c9"
+  destructive: "#aa3333"
+  success: "oklch(0.58 0.13 134)"
+  success-strong: "#3f6b1a"
+  warning: "oklch(0.758 0.152 80.1)"
+  warning-strong: "#8a6416"
   info: "oklch(0.635 0.089 195.1)"
-  chart-1: "oklch(0.537 0.206 27.8)"
-  chart-2: "oklch(0.758 0.152 69.3)"
-  chart-2-strong: "oklch(0.51 0.152 69.3)"
+  chart-1: "#cbff1e"
+  chart-2: "oklch(0.758 0.152 80.1)"
+  chart-2-strong: "#8a6416"
   chart-3: "oklch(0.635 0.089 195.1)"
   chart-3-strong: "oklch(0.483 0.089 195.1)"
   chart-4: "oklch(0.628 0.183 327.5)"
@@ -92,22 +92,29 @@ components:
 
 ## Overview
 
-TAP brand red/brown/white applied through a shadcn/ui (new-york) system on
-Tailwind v4 + next-themes. The normative palette, radii, and fonts live in
-`src/app/globals.css` (OKLCH, light + dark); if this file and the code
+Velocity Bedrock / Signal / Voltage applied through a shadcn/ui (new-york)
+system on Tailwind v4 + next-themes. The normative palette, radii, and fonts
+live in `src/app/globals.css` (OKLCH, light + dark); if this file and the code
 disagree, the code wins and this file should be updated. Every UI change must
 use tokens — a hardcoded color in a component is a defect.
 
 ## Colors
 
-Brand core: TAP red `#b31b1b` (primary, links, focus), TAP brown `#2c1a1d`
-(foreground, secondary surface), TAP white `#fcfff7` (background). Status
-semantics: `success` green, `warning` amber (hue = chart-2), `info` teal
-(hue = chart-3), `destructive` red.
+Brand core: Voltage `#cbff1e` (primary fill, accent, chart-1), Bedrock
+`#0b0b0b` (foreground, secondary, dark background), Signal `#f1f0ef` (light
+background). Status semantics: `success` olive (hue near Voltage), `warning`
+amber (hue = chart-2), `info` teal (hue = chart-3), `destructive` brick.
+
+Named brand tokens `bedrock`, `signal`, and `voltage` are also on the
+Tailwind theme for direct use (logos, cinematic surfaces). Chrome gradient
+is logo-only and is not a semantic UI token.
 
 Rules:
 
 - Semantic tokens only; never hardcoded hex/oklch in components.
+- Voltage is a **surface/accent** in light mode (~1:1 on Signal) — never
+  body text on a light surface. Buttons use Voltage fill with Bedrock text.
+  Light-mode focus rings use Bedrock; dark-mode rings use Voltage.
 - Surface tones (`success`, `warning`, chart-2/3) are **not text-safe** in
   light mode — for text use the darkened `-strong` variants
   (`success-strong`, `warning-strong`, `chart-2-strong`, `chart-3-strong`).

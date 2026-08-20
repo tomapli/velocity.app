@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { AuthPageShell } from "@/components/auth/auth-page-shell";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { VelocityLogo } from "@/components/brand/velocity-logo";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_LOGGED_IN_PAGE } from "@/lib/constants/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -29,13 +30,16 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <AuthPageShell>
-      <div className="space-y-2 text-center">
-        <h1 className="font-heading text-4xl font-bold tracking-tight text-primary">
-          Sign in
-        </h1>
-        <p className="text-muted-foreground">
-          Continue with Google. This signs you in or creates an account.
-        </p>
+      <div className="flex flex-col items-center space-y-6 text-center">
+        <VelocityLogo size="auth" motion="metal" />
+        <div className="space-y-2">
+          <h1 className="font-heading text-4xl font-bold tracking-tight text-foreground">
+            Sign in
+          </h1>
+          <p className="text-muted-foreground">
+            Continue with Google. This signs you in or creates an account.
+          </p>
+        </div>
       </div>
 
       {user ? (

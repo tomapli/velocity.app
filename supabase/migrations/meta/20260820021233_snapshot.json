@@ -1,0 +1,348 @@
+{
+  "id": "9c66af4c-c79e-4817-88f7-2b693c719a54",
+  "prevId": "8b6afc2f-65c9-49e6-9471-0c3dc1314317",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.authorized_users": {
+      "name": "authorized_users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "authorized_users_user_id_fkey": {
+          "name": "authorized_users_user_id_fkey",
+          "tableFrom": "authorized_users",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "authorized_users_email_key": {
+          "name": "authorized_users_email_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        },
+        "authorized_users_user_id_key": {
+          "name": "authorized_users_user_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "authorized_users_email_format": {
+          "name": "authorized_users_email_format",
+          "value": "char_length(trim(email)) >= 3 AND email = lower(email) AND email LIKE '%_@_%.%'"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.ig_profiles": {
+      "name": "ig_profiles",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "ig_profile_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'idle'"
+        },
+        "source_url": {
+          "name": "source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "searched_at": {
+          "name": "searched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ig_profiles_searched_at_idx": {
+          "name": "ig_profiles_searched_at_idx",
+          "columns": [
+            {
+              "expression": "searched_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ig_profiles_created_by_fkey": {
+          "name": "ig_profiles_created_by_fkey",
+          "tableFrom": "ig_profiles",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ig_profiles_username_key": {
+          "name": "ig_profiles_username_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "username"
+          ]
+        }
+      },
+      "policies": {
+        "Authenticated users can view ig profiles": {
+          "name": "Authenticated users can view ig profiles",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "true"
+        },
+        "Authenticated users can insert their own ig profiles": {
+          "name": "Authenticated users can insert their own ig profiles",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(( SELECT auth.uid() AS uid) = created_by)"
+        },
+        "Authenticated users can update ig profiles": {
+          "name": "Authenticated users can update ig profiles",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": "true"
+        }
+      },
+      "checkConstraints": {
+        "ig_profiles_username_format": {
+          "name": "ig_profiles_username_format",
+          "value": "username = lower(username) AND username ~ '^[a-z0-9._]{1,30}$'"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.items": {
+      "name": "items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "items_created_at_idx": {
+          "name": "items_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "items_created_by_fkey": {
+          "name": "items_created_by_fkey",
+          "tableFrom": "items",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "Authenticated users can view items": {
+          "name": "Authenticated users can view items",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "true"
+        },
+        "Authenticated users can insert their own items": {
+          "name": "Authenticated users can insert their own items",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(( SELECT auth.uid() AS uid) = created_by)"
+        },
+        "Authenticated users can delete items": {
+          "name": "Authenticated users can delete items",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "true"
+        }
+      },
+      "checkConstraints": {
+        "items_title_length": {
+          "name": "items_title_length",
+          "value": "char_length(trim(title)) >= 1 AND char_length(title) <= 200"
+        }
+      },
+      "isRLSEnabled": true
+    }
+  },
+  "enums": {
+    "public.ig_profile_status": {
+      "name": "ig_profile_status",
+      "schema": "public",
+      "values": [
+        "idle",
+        "waiting",
+        "scraping",
+        "ready",
+        "error"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

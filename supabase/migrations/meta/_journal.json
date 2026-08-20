@@ -29,6 +29,20 @@
       "when": 1787187980753,
       "tag": "20260820010620_illegal_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787191953348,
+      "tag": "20260820021233_ig_profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787191956055,
+      "tag": "20260820021236_ig_profiles_realtime",
+      "breakpoints": true
     }
   ]
 }

@@ -136,7 +136,7 @@ export function LoginIntroOverlayView({
       variant="ghost"
       aria-label={DISMISS_LABEL}
       className={cn(
-        "fixed inset-0 z-[200] h-dvh w-screen max-w-none overflow-hidden rounded-none border-0 bg-background p-0 hover:bg-background",
+        "fixed inset-0 z-[200] h-dvh w-screen max-w-none overflow-hidden rounded-none border-0 bg-bedrock p-0 hover:bg-bedrock",
         "transition-[opacity,transform] duration-500 ease-out motion-reduce:transition-none",
         phase === "leaving" && "pointer-events-none scale-105 opacity-0",
       )}

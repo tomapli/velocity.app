@@ -34,7 +34,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
-  themeColor: "#b31b1b",
+  themeColor: "#cbff1e",
 };
 
 const poppins = Poppins({
@@ -68,7 +68,7 @@ export default function RootLayout({
       <body
         className={`${roboto.variable} ${poppins.variable} ${pacifico.variable} font-body antialiased`}
       >
-        <NextTopLoader color="#b31b1b" showSpinner={false} height={3} />
+        <NextTopLoader color="#cbff1e" showSpinner={false} height={3} />
         <PostHogProvider>
           <ThemeProvider
             attribute="class"

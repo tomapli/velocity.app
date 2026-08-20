@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 
 import { LoginIntroOverlay } from "@/components/auth/login-intro-overlay";
+import { AppHeaderBrand } from "@/components/brand/app-header-brand";
 import { LogoutButton } from "@/components/logout-button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { getSessionUser } from "@/lib/auth/session";
@@ -18,7 +19,7 @@ export default async function DashboardLayout({
         <LoginIntroOverlay />
       </Suspense>
       <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b px-4">
-        <p className="font-heading text-lg font-semibold">Items</p>
+        <AppHeaderBrand />
         <div className="flex items-center gap-3">
           {user?.email ? (
             <p className="hidden text-sm text-muted-foreground sm:block">

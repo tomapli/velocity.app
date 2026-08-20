@@ -4,8 +4,8 @@
   "description": "Next.js + Supabase starter with live data.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fcfff7",
-  "theme_color": "#b31b1b",
+  "background_color": "#f1f0ef",
+  "theme_color": "#cbff1e",
   "orientation": "portrait-primary",
   "icons": [
     {
