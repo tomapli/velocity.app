@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -24,9 +25,14 @@ import {
   instagramProfileUrl,
   parseIgSearchInput,
 } from "@/lib/ig/parse-input";
-import type { IgProfile, ScheduledScrape } from "@/lib/ig/queries";
+import {
+  getIgProfileByUsername,
+  type IgProfile,
+  type ScheduledScrape,
+} from "@/lib/ig/queries";
 import { scheduleIgScrape } from "@/lib/ig/schedule-scrape";
 import { useIgScrapesRealtime } from "@/lib/ig/use-ig-scrapes-realtime";
+import { createClient } from "@/lib/supabase/client";
 
 interface IgSearchHomeProps {
   initialJobs: IgScrapeJob[];
@@ -36,6 +42,7 @@ interface IgSearchHomeProps {
  * Home screen for searching Instagram profiles and scheduling scrapes.
  */
 export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
+  const router = useRouter();
   const [profiles, setProfiles] = useState<IgProfile[]>(() =>
     initialJobs.map((job) => job.profile),
   );
@@ -105,6 +112,15 @@ export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
     setIsSearching(true);
 
     try {
+      const supabase = createClient();
+      const existing = await getIgProfileByUsername(supabase, parsed.username);
+
+      if (existing) {
+        router.push(`/ig/${existing.ig_username}`);
+        setQuery("");
+        return;
+      }
+
       if (parsed.isUrlInput) {
         setActiveDialog(parsed);
         setQuery("");

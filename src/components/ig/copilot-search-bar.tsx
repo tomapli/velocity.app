@@ -37,25 +37,8 @@ export function CopilotSearchBar({
 
   return (
     <form onSubmit={handleSubmit} className="mx-auto w-full max-w-2xl">
-      <div
-        className={cn(
-          "copilot-gradient-shell relative overflow-hidden rounded-[2rem] p-1 shadow-lg",
-          "motion-reduce:copilot-gradient-static",
-        )}
-      >
-        <div
-          className={cn(
-            "copilot-gradient pointer-events-none absolute inset-[-60%] motion-safe:copilot-gradient-rotate motion-reduce:hidden",
-          )}
-          aria-hidden
-        />
-        <div
-          className={cn(
-            "copilot-gradient pointer-events-none absolute inset-[-60%] opacity-90 blur-2xl motion-safe:copilot-gradient-rotate motion-reduce:hidden",
-          )}
-          aria-hidden
-        />
-        <div className="relative flex items-center gap-2 rounded-[calc(2rem-4px)] bg-background/95 px-4 py-3 backdrop-blur-sm sm:px-5 sm:py-4">
+      <div className="copilot-gradient-shell rounded-[2rem] p-1 shadow-lg">
+        <div className="relative z-10 flex items-center gap-2 rounded-[calc(2rem-4px)] bg-background/95 px-4 py-3 backdrop-blur-sm sm:px-5 sm:py-4">
           <input
             ref={inputRef}
             type="text"
