@@ -21,16 +21,14 @@ import {
   upsertScheduledScrape,
   type IgScrapeJob,
 } from "@/lib/ig/groups";
-import {
-  instagramProfileUrl,
-  parseIgSearchInput,
-} from "@/lib/ig/parse-input";
+import { instagramProfileUrl } from "@/lib/ig/parse-input";
 import {
   getIgProfileByUsername,
   type IgProfile,
   type ScheduledScrape,
 } from "@/lib/ig/queries";
 import { scheduleIgScrape } from "@/lib/ig/schedule-scrape";
+import type { IgSearchOption } from "@/lib/ig/search-options";
 import { useIgScrapesRealtime } from "@/lib/ig/use-ig-scrapes-realtime";
 import { createClient } from "@/lib/supabase/client";
 
@@ -102,18 +100,18 @@ export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [openNextPendingDialog]);
 
-  const handleSearch = async () => {
-    const parsed = parseIgSearchInput(query);
-    if (!parsed) {
-      toast.error("Enter a valid Instagram username or profile URL");
-      return;
-    }
-
+  const handleSelect = async (option: IgSearchOption) => {
     setIsSearching(true);
 
     try {
+      if (option.kind === "existing") {
+        router.push(`/ig/${option.username}`);
+        setQuery("");
+        return;
+      }
+
       const supabase = createClient();
-      const existing = await getIgProfileByUsername(supabase, parsed.username);
+      const existing = await getIgProfileByUsername(supabase, option.username);
 
       if (existing) {
         router.push(`/ig/${existing.ig_username}`);
@@ -121,14 +119,19 @@ export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
         return;
       }
 
-      if (parsed.isUrlInput) {
-        setActiveDialog(parsed);
+      const pending = {
+        username: option.username,
+        isUrlInput: option.isUrlInput,
+      };
+
+      if (option.isUrlInput) {
+        setActiveDialog(pending);
         setQuery("");
         return;
       }
 
-      enqueuePendingIgScrape(parsed);
-      window.open(instagramProfileUrl(parsed.username), "_blank", "noopener,noreferrer");
+      enqueuePendingIgScrape(pending);
+      window.open(instagramProfileUrl(option.username), "_blank", "noopener,noreferrer");
       setQuery("");
     } finally {
       setIsSearching(false);
@@ -176,7 +179,8 @@ export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
           <CopilotSearchBar
             value={query}
             onChange={setQuery}
-            onSubmit={handleSearch}
+            onSelect={handleSelect}
+            profiles={profiles}
             disabled={isSearching}
           />
         </div>
