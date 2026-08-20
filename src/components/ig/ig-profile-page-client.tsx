@@ -7,7 +7,6 @@ import { Instagram, LoaderCircle } from "lucide-react";
 import { IgPostsTable } from "@/components/ig/ig-posts-table";
 import { IgPostsToolbar } from "@/components/ig/ig-posts-toolbar";
 import { ScrapeParamsDialog } from "@/components/ig/scrape-params-dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -215,26 +214,6 @@ export function IgProfilePageClient({
         }
       />
 
-      <section className="flex items-center gap-4">
-        <Avatar size="xl" className="rounded-2xl">
-          {profile?.profile_picture_url ? (
-            <AvatarImage src={profile.profile_picture_url} alt="" />
-          ) : null}
-          <AvatarFallback className="rounded-2xl">
-            {username.slice(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 space-y-1">
-          {profile?.description ? (
-            <p className="line-clamp-2 text-sm text-muted-foreground">{profile.description}</p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Color-coded against Instagram engagement targets (ER ≥ 5%, weighted ER ≥ 10%).
-            </p>
-          )}
-        </div>
-      </section>
-
       <IgPostsToolbar
         mediaTypes={mediaTypes}
         onMediaTypesChange={setMediaTypes}
@@ -285,7 +264,14 @@ export function IgProfilePageClient({
           </EmptyHeader>
         </Empty>
       ) : (
-        <IgPostsTable username={username} posts={visiblePosts} />
+        <IgPostsTable
+          username={username}
+          posts={visiblePosts}
+          sortKey={sortKey}
+          sortDirection={sortDirection}
+          onSortKeyChange={setSortKey}
+          onSortDirectionChange={setSortDirection}
+        />
       )}
 
       <Dialog open={promptMode != null} onOpenChange={(open) => !open && setPromptMode(null)}>

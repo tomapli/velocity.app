@@ -27,7 +27,6 @@ interface IgPostDetailProps {
  */
 export function IgPostDetail({ username, profile, post }: IgPostDetailProps) {
   const metrics = getIgPostMetrics(post);
-  const mediaAspectClass = post.media_type === "short" ? "aspect-[9/16]" : "aspect-square";
   const scored = [
     { label: "Video length", value: metrics.videoLength, hint: "Entertainment 5–40s · educational 25–60s" },
     { label: "Description length", value: metrics.descriptionLengthScore, hint: "≈ 300–700 characters" },
@@ -75,36 +74,11 @@ export function IgPostDetail({ username, profile, post }: IgPostDetailProps) {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {post.video_embed_url ? (
-          <MediaTile
-            label="Video"
-            aspectClass={mediaAspectClass}
-            videoSrc={post.video_embed_url}
-            poster={post.thumbnail_url ?? post.first_frame_url ?? undefined}
-          />
-        ) : (
-          <MediaTile
-            label="Preview"
-            src={post.thumbnail_url ?? post.first_frame_url}
-            aspectClass={post.media_type === "short" ? "aspect-[9/16]" : "aspect-[4/5]"}
-          />
-        )}
-        {post.thumbnail_url ? (
-          <MediaTile label="Thumbnail" src={post.thumbnail_url} aspectClass={mediaAspectClass} />
-        ) : null}
-        {post.first_frame_url ? (
-          <MediaTile label="First frame" src={post.first_frame_url} aspectClass={mediaAspectClass} />
-        ) : null}
-        {post.carousel_image_urls?.map((url, index) => (
-          <MediaTile
-            key={url}
-            label={`Slide ${index + 1}`}
-            src={url}
-            aspectClass={mediaAspectClass}
-          />
-        ))}
-      </div>
+      {post.media_type === "short" ? (
+        <ShortMediaGrid post={post} />
+      ) : (
+        <CarouselMediaGrid post={post} />
+      )}
 
       {counts.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -156,6 +130,69 @@ export function IgPostDetail({ username, profile, post }: IgPostDetailProps) {
         Predictive hook/body scores and comment quality are omitted until those fields exist
         in the scrape.
       </p>
+    </div>
+  );
+}
+
+const SHORT_MEDIA_ASPECT = "aspect-[9/16]";
+
+/**
+ * Equal-thirds layout for short-form video posts.
+ */
+function ShortMediaGrid({ post }: { post: IgPost }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {post.video_embed_url ? (
+        <MediaTile
+          label="Video"
+          aspectClass={SHORT_MEDIA_ASPECT}
+          videoSrc={post.video_embed_url}
+          poster={post.thumbnail_url ?? post.first_frame_url ?? undefined}
+        />
+      ) : (
+        <MediaTile
+          label="Preview"
+          src={post.thumbnail_url ?? post.first_frame_url}
+          aspectClass={SHORT_MEDIA_ASPECT}
+        />
+      )}
+      {post.thumbnail_url ? (
+        <MediaTile label="Thumbnail" src={post.thumbnail_url} aspectClass={SHORT_MEDIA_ASPECT} />
+      ) : null}
+      {post.first_frame_url ? (
+        <MediaTile label="First frame" src={post.first_frame_url} aspectClass={SHORT_MEDIA_ASPECT} />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Two-column layout for carousel and static posts: hero preview plus tile grid.
+ */
+function CarouselMediaGrid({ post }: { post: IgPost }) {
+  return (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+      <Card className="overflow-hidden rounded-2xl py-0 shadow-sm">
+        <CardContent className="p-0">
+          <IgRemoteImage
+            src={post.thumbnail_url ?? post.first_frame_url}
+            alt=""
+            className="aspect-[4/5] w-full"
+          />
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {post.thumbnail_url ? (
+          <MediaTile label="Thumbnail" src={post.thumbnail_url} aspectClass="aspect-square" />
+        ) : null}
+        {post.first_frame_url ? (
+          <MediaTile label="First frame" src={post.first_frame_url} aspectClass="aspect-square" />
+        ) : null}
+        {post.carousel_image_urls?.map((url, index) => (
+          <MediaTile key={url} label={`Slide ${index + 1}`} src={url} aspectClass="aspect-square" />
+        ))}
+      </div>
     </div>
   );
 }

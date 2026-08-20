@@ -122,7 +122,7 @@ function StatusBadge({ job }: { job: IgScrapeJob }) {
 const STATUS_BADGE_CLASSES: Record<IgScrapeStatus, string> = {
   waiting: "border-muted-foreground/30 text-muted-foreground",
   scraping: "border-info/40 bg-info/10 text-info-foreground",
-  ready: "border-success/40 bg-success/10 text-success-foreground",
+  ready: "border-success/40 bg-success/10 text-success-strong",
   error: "border-destructive/40 bg-destructive/10 text-destructive",
 };
 

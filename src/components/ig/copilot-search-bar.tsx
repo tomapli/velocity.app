@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Search, Sparkles } from "lucide-react";
+import { Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -39,17 +39,25 @@ export function CopilotSearchBar({
     <form onSubmit={handleSubmit} className="mx-auto w-full max-w-2xl">
       <div
         className={cn(
-          "relative rounded-[2rem] p-[2px] shadow-lg",
-          "bg-[linear-gradient(135deg,var(--chart-2),var(--chart-3),var(--chart-4),var(--voltage))]",
-          "before:pointer-events-none before:absolute before:inset-0 before:rounded-[2rem] before:opacity-60 before:blur-xl",
-          "before:bg-[linear-gradient(135deg,var(--chart-2),var(--chart-3),var(--chart-4),var(--voltage))]",
+          "relative overflow-hidden rounded-[2rem] p-[2px] shadow-lg",
+          "motion-reduce:bg-[linear-gradient(135deg,var(--chart-2),var(--chart-3),var(--chart-4),var(--voltage))]",
         )}
       >
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-[-50%] motion-safe:copilot-gradient-rotate motion-reduce:hidden",
+            "bg-[conic-gradient(from_0deg,var(--chart-2),var(--chart-3),var(--chart-4),var(--voltage),var(--chart-2))]",
+          )}
+          aria-hidden
+        />
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-[-50%] opacity-60 blur-xl motion-safe:copilot-gradient-rotate motion-reduce:hidden",
+            "bg-[conic-gradient(from_0deg,var(--chart-2),var(--chart-3),var(--chart-4),var(--voltage),var(--chart-2))]",
+          )}
+          aria-hidden
+        />
         <div className="relative flex items-center gap-2 rounded-[calc(2rem-2px)] bg-background/95 px-4 py-3 backdrop-blur-sm sm:px-5 sm:py-4">
-          <Sparkles
-            className="size-5 shrink-0 text-chart-3-strong sm:size-6"
-            aria-hidden
-          />
           <input
             ref={inputRef}
             type="text"
@@ -70,7 +78,11 @@ export function CopilotSearchBar({
             size="icon"
             disabled={disabled || value.trim().length === 0}
             aria-label="Search Instagram profile"
-            className="size-10 shrink-0 rounded-full bg-primary text-primary-foreground shadow-md hover:bg-primary/90"
+            className={cn(
+              "size-10 shrink-0 rounded-full bg-primary text-primary-foreground shadow-md",
+              "transition-transform duration-200 hover:scale-105 hover:bg-primary/90",
+              "motion-reduce:hover:scale-100",
+            )}
           >
             <Search className="size-4" />
           </Button>

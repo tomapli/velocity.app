@@ -30,6 +30,13 @@ function post(overrides: Partial<IgPost> = {}): IgPost {
   };
 }
 
+const sortProps = {
+  sortKey: "uploaded_at" as const,
+  sortDirection: "desc" as const,
+  onSortKeyChange: vi.fn(),
+  onSortDirectionChange: vi.fn(),
+};
+
 describe("IgPostsTable", () => {
   it("renders available metrics and hides omitted values", () => {
     render(
@@ -46,6 +53,7 @@ describe("IgPostsTable", () => {
             media_type: "static",
           }),
         ]}
+        {...sortProps}
       />,
     );
 
@@ -57,6 +65,65 @@ describe("IgPostsTable", () => {
       "/ig/velocity/e1000000-0000-4000-8000-000000000001",
     );
     expect(screen.queryByText("Comment quality")).not.toBeInTheDocument();
+  });
+
+  it("switches sort column when a different header is clicked", async () => {
+    const user = userEvent.setup();
+    const onSortKeyChange = vi.fn();
+    const onSortDirectionChange = vi.fn();
+
+    render(
+      <IgPostsTable
+        username="velocity"
+        posts={[post()]}
+        sortKey="uploaded_at"
+        sortDirection="desc"
+        onSortKeyChange={onSortKeyChange}
+        onSortDirectionChange={onSortDirectionChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Views" }));
+    expect(onSortKeyChange).toHaveBeenCalledWith("view_count");
+    expect(onSortDirectionChange).toHaveBeenCalledWith("desc");
+  });
+
+  it("toggles sort direction when the active header is clicked again", async () => {
+    const user = userEvent.setup();
+    const onSortKeyChange = vi.fn();
+    const onSortDirectionChange = vi.fn();
+
+    render(
+      <IgPostsTable
+        username="velocity"
+        posts={[post()]}
+        sortKey="view_count"
+        sortDirection="desc"
+        onSortKeyChange={onSortKeyChange}
+        onSortDirectionChange={onSortDirectionChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Views" }));
+    expect(onSortKeyChange).not.toHaveBeenCalled();
+    expect(onSortDirectionChange).toHaveBeenCalledWith("asc");
+  });
+
+  it("shows a sort arrow on the active column", () => {
+    const { container } = render(
+      <IgPostsTable
+        username="velocity"
+        posts={[post()]}
+        sortKey="like_count"
+        sortDirection="asc"
+        onSortKeyChange={vi.fn()}
+        onSortDirectionChange={vi.fn()}
+      />,
+    );
+
+    const likesHeader = screen.getByRole("button", { name: "Likes" });
+    expect(likesHeader.querySelector("svg")).toBeInTheDocument();
+    expect(container.querySelector('[aria-sort="ascending"]')).toHaveTextContent("Likes");
   });
 });
 

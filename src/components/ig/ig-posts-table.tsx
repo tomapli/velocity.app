@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ExternalLink, Layers, Play } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink, Layers, Play } from "lucide-react";
 
 import { IgMetricBadge, IgPlainMetric } from "@/components/ig/ig-metric-badge";
 import { IgRemoteImage } from "@/components/ig/ig-remote-image";
@@ -26,6 +26,7 @@ import {
   formatUploadedAt,
   getIgPostMetrics,
   MEDIA_TYPE_LABELS,
+  type IgPostSortKey,
 } from "@/lib/ig/metrics";
 import type { IgPost } from "@/lib/ig/queries";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,10 @@ import { cn } from "@/lib/utils";
 interface IgPostsTableProps {
   username: string;
   posts: IgPost[];
+  sortKey: IgPostSortKey;
+  sortDirection: "asc" | "desc";
+  onSortKeyChange: (key: IgPostSortKey) => void;
+  onSortDirectionChange: (direction: "asc" | "desc") => void;
 }
 
 const PREVIEW_PRIMARY_SIZE = "size-20";
@@ -47,7 +52,24 @@ const MEDIA_TYPE_BADGE_CLASS: Record<NonNullable<IgPost["media_type"]>, string> 
 /**
  * Elevated results table with previews and color-coded Instagram metrics.
  */
-export function IgPostsTable({ username, posts }: IgPostsTableProps) {
+export function IgPostsTable({
+  username,
+  posts,
+  sortKey,
+  sortDirection,
+  onSortKeyChange,
+  onSortDirectionChange,
+}: IgPostsTableProps) {
+  const handleSort = (key: IgPostSortKey) => {
+    if (sortKey === key) {
+      onSortDirectionChange(sortDirection === "desc" ? "asc" : "desc");
+      return;
+    }
+
+    onSortKeyChange(key);
+    onSortDirectionChange("desc");
+  };
+
   if (posts.length === 0) {
     return (
       <Empty className="border">
@@ -70,21 +92,106 @@ export function IgPostsTable({ username, posts }: IgPostsTableProps) {
         <TableHeader className="bg-muted/40">
           <TableRow className="hover:bg-transparent">
             <TableHead className="min-w-40 pl-4">Preview</TableHead>
-            <TableHead>Uploaded</TableHead>
+            <SortableTableHead
+              label="Uploaded"
+              columnKey="uploaded_at"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
             <TableHead>Type</TableHead>
-            <TableHead>Length</TableHead>
-            <TableHead>Views</TableHead>
-            <TableHead>Likes</TableHead>
-            <TableHead>Comments</TableHead>
-            <TableHead>Saves</TableHead>
-            <TableHead>Shares</TableHead>
-            <TableHead>ER</TableHead>
-            <TableHead>wER</TableHead>
-            <TableHead>Save %</TableHead>
-            <TableHead>Share %</TableHead>
-            <TableHead>Cmt %</TableHead>
-            <TableHead>Like %</TableHead>
-            <TableHead className="min-w-52 pr-4">Description</TableHead>
+            <SortableTableHead
+              label="Length"
+              columnKey="video_length_secs"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Views"
+              columnKey="view_count"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Likes"
+              columnKey="like_count"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Comments"
+              columnKey="comment_count"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Saves"
+              columnKey="save_count"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Shares"
+              columnKey="share_count"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="ER"
+              columnKey="er"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="wER"
+              columnKey="weighted_er"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Save %"
+              columnKey="save_rate"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Share %"
+              columnKey="share_rate"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Cmt %"
+              columnKey="comment_rate"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Like %"
+              columnKey="like_rate"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Description"
+              columnKey="description_length"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+              className="min-w-52 pr-4"
+            />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -94,6 +201,54 @@ export function IgPostsTable({ username, posts }: IgPostsTableProps) {
         </TableBody>
       </Table>
     </div>
+  );
+}
+
+interface SortableTableHeadProps {
+  label: string;
+  columnKey: IgPostSortKey;
+  sortKey: IgPostSortKey;
+  sortDirection: "asc" | "desc";
+  onSort: (key: IgPostSortKey) => void;
+  className?: string;
+}
+
+/**
+ * Clickable table header that toggles sort direction or switches the active sort column.
+ */
+function SortableTableHead({
+  label,
+  columnKey,
+  sortKey,
+  sortDirection,
+  onSort,
+  className,
+}: SortableTableHeadProps) {
+  const isActive = sortKey === columnKey;
+
+  return (
+    <TableHead
+      className={className}
+      aria-sort={isActive ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(columnKey)}
+        className={cn(
+          "inline-flex items-center gap-1 rounded-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          isActive ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        {label}
+        {isActive ? (
+          sortDirection === "desc" ? (
+            <ArrowDown className="size-3.5" aria-hidden="true" />
+          ) : (
+            <ArrowUp className="size-3.5" aria-hidden="true" />
+          )
+        ) : null}
+      </button>
+    </TableHead>
   );
 }
 
