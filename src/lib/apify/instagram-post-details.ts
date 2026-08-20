@@ -187,11 +187,15 @@ function getFirstFrameUrl(
     return firstFrame[0]?.url ?? null;
   }
 
-  if ("items" in firstFrame && Array.isArray(firstFrame.items)) {
+  if (Array.isArray(firstFrame.items)) {
     return firstFrame.items[0]?.url ?? null;
   }
 
-  return firstFrame.url ?? null;
+  if ("url" in firstFrame) {
+    return firstFrame.url ?? null;
+  }
+
+  return null;
 }
 
 function getCaptionText(
