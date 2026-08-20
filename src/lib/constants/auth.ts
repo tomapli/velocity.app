@@ -9,6 +9,9 @@ export const AUTH_CALLBACK_PATH = "/auth/callback";
 export const AUTH_ERROR_PATH = "/auth/error";
 export const AUTH_UNAUTHORIZED_PATH = "/auth/unauthorized";
 
+/** Internal request header set only after the proxy verifies a user session. */
+export const PROXY_AUTHENTICATED_USER_ID_HEADER = "x-velocity-authenticated-user-id";
+
 /**
  * Default page to redirect users to after successful login.
  */

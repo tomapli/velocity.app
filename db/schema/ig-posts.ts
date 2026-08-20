@@ -14,7 +14,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
-import { igScrapes } from "./ig-scrapes";
+import { igProfiles } from "./ig-profiles";
+import { scheduledScrapes } from "./scheduled-scrapes";
 
 export const igPostMediaType = pgEnum("ig_post_media_type", [
   "carousel",
@@ -26,16 +27,18 @@ export const igPosts = pgTable(
   "ig_posts",
   {
     id: uuid().defaultRandom().primaryKey().notNull(),
-    igScrapeId: uuid("ig_scrape_id").notNull(),
+    igProfileId: uuid("ig_profile_id").notNull(),
+    sourceScrapeId: uuid("source_scrape_id").notNull(),
+    detailsScrapeId: uuid("details_scrape_id"),
     uploadedAt: timestamp("uploaded_at", {
       withTimezone: true,
       mode: "string",
-    }).notNull(),
+    }),
     thumbnailUrl: text("thumbnail_url"),
     postUrl: text("post_url").notNull(),
     firstFrameUrl: text("first_frame_url"),
     videoEmbedUrl: text("video_embed_url"),
-    mediaType: igPostMediaType("media_type").notNull(),
+    mediaType: igPostMediaType("media_type"),
     carouselImageUrls: text("carousel_image_urls").array(),
     videoLengthSecs: integer("video_length_secs"),
     viewCount: integer("view_count"),
@@ -52,17 +55,29 @@ export const igPosts = pgTable(
       .notNull(),
   },
   (table) => [
-    index("ig_posts_ig_scrape_id_idx").on(table.igScrapeId),
+    index("ig_posts_ig_profile_id_idx").on(table.igProfileId),
+    index("ig_posts_source_scrape_id_idx").on(table.sourceScrapeId),
+    index("ig_posts_details_scrape_id_idx").on(table.detailsScrapeId),
     index("ig_posts_uploaded_at_idx").on(table.uploadedAt.desc()),
-    unique("ig_posts_ig_scrape_id_post_url_key").on(
-      table.igScrapeId,
+    unique("ig_posts_ig_profile_id_post_url_key").on(
+      table.igProfileId,
       table.postUrl,
     ),
     foreignKey({
-      columns: [table.igScrapeId],
-      foreignColumns: [igScrapes.id],
-      name: "ig_posts_ig_scrape_id_fkey",
+      columns: [table.igProfileId],
+      foreignColumns: [igProfiles.id],
+      name: "ig_posts_ig_profile_id_fkey",
     }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.sourceScrapeId],
+      foreignColumns: [scheduledScrapes.id],
+      name: "ig_posts_source_scrape_id_fkey",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.detailsScrapeId],
+      foreignColumns: [scheduledScrapes.id],
+      name: "ig_posts_details_scrape_id_fkey",
+    }).onDelete("set null"),
     check(
       "ig_posts_post_url_length",
       sql`char_length(trim(post_url)) >= 1 AND char_length(post_url) <= 2048`,
@@ -103,9 +118,9 @@ export const igPosts = pgTable(
       to: ["authenticated"],
       withCheck: sql`EXISTS (
         SELECT 1
-        FROM public.ig_scrapes
-        WHERE ig_scrapes.id = ig_scrape_id
-          AND ig_scrapes.started_by = (SELECT auth.uid() AS uid)
+        FROM public.scheduled_scrapes
+        WHERE scheduled_scrapes.id = source_scrape_id
+          AND scheduled_scrapes.started_by = (SELECT auth.uid() AS uid)
       )`,
     }),
     pgPolicy("Authenticated users can update ig posts for their scrapes", {
@@ -114,15 +129,15 @@ export const igPosts = pgTable(
       to: ["authenticated"],
       using: sql`EXISTS (
         SELECT 1
-        FROM public.ig_scrapes
-        WHERE ig_scrapes.id = ig_scrape_id
-          AND ig_scrapes.started_by = (SELECT auth.uid() AS uid)
+        FROM public.scheduled_scrapes
+        WHERE scheduled_scrapes.id = source_scrape_id
+          AND scheduled_scrapes.started_by = (SELECT auth.uid() AS uid)
       )`,
       withCheck: sql`EXISTS (
         SELECT 1
-        FROM public.ig_scrapes
-        WHERE ig_scrapes.id = ig_scrape_id
-          AND ig_scrapes.started_by = (SELECT auth.uid() AS uid)
+        FROM public.scheduled_scrapes
+        WHERE scheduled_scrapes.id = source_scrape_id
+          AND scheduled_scrapes.started_by = (SELECT auth.uid() AS uid)
       )`,
     }),
   ],

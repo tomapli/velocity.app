@@ -1,0 +1,1 @@
+ALTER POLICY "Authenticated users can update ig scrapes" ON "ig_scrapes" TO authenticated USING ((( SELECT auth.uid() AS uid) = started_by)) WITH CHECK ((( SELECT auth.uid() AS uid) = started_by));

@@ -1,0 +1,650 @@
+{
+  "id": "81a682db-d133-4888-bffb-cc73c90a0e12",
+  "prevId": "64d5c1c9-7f66-44c3-808c-341c8e0184e5",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.authorized_users": {
+      "name": "authorized_users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "picture_url": {
+          "name": "picture_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "authorized_users_user_id_fkey": {
+          "name": "authorized_users_user_id_fkey",
+          "tableFrom": "authorized_users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "set null"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "authorized_users_email_key": {
+          "name": "authorized_users_email_key",
+          "columns": [
+            "email"
+          ],
+          "nullsNotDistinct": false
+        },
+        "authorized_users_user_id_key": {
+          "name": "authorized_users_user_id_key",
+          "columns": [
+            "user_id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "authorized_users_email_format": {
+          "name": "authorized_users_email_format",
+          "value": "char_length(trim(email)) >= 3 AND email = lower(email) AND email LIKE '%_@_%.%'"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.ig_posts": {
+      "name": "ig_posts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "ig_scrape_id": {
+          "name": "ig_scrape_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "uploaded_at": {
+          "name": "uploaded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "thumbnail_url": {
+          "name": "thumbnail_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "post_url": {
+          "name": "post_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "first_frame_url": {
+          "name": "first_frame_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "video_embed_url": {
+          "name": "video_embed_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "media_type": {
+          "name": "media_type",
+          "type": "ig_post_media_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "carousel_image_urls": {
+          "name": "carousel_image_urls",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "video_length_secs": {
+          "name": "video_length_secs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "view_count": {
+          "name": "view_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "save_count": {
+          "name": "save_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "share_count": {
+          "name": "share_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "comment_count": {
+          "name": "comment_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "like_count": {
+          "name": "like_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ig_posts_ig_scrape_id_idx": {
+          "name": "ig_posts_ig_scrape_id_idx",
+          "columns": [
+            {
+              "expression": "ig_scrape_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "ig_posts_uploaded_at_idx": {
+          "name": "ig_posts_uploaded_at_idx",
+          "columns": [
+            {
+              "expression": "uploaded_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "ig_posts_ig_scrape_id_fkey": {
+          "name": "ig_posts_ig_scrape_id_fkey",
+          "tableFrom": "ig_posts",
+          "columnsFrom": [
+            "ig_scrape_id"
+          ],
+          "tableTo": "ig_scrapes",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ig_posts_ig_scrape_id_post_url_key": {
+          "name": "ig_posts_ig_scrape_id_post_url_key",
+          "columns": [
+            "ig_scrape_id",
+            "post_url"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "Authenticated users can view ig posts": {
+          "name": "Authenticated users can view ig posts",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "true"
+        },
+        "Authenticated users can insert ig posts for their scrapes": {
+          "name": "Authenticated users can insert ig posts for their scrapes",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "EXISTS (\n        SELECT 1\n        FROM public.ig_scrapes\n        WHERE ig_scrapes.id = ig_scrape_id\n          AND ig_scrapes.started_by = (SELECT auth.uid() AS uid)\n      )"
+        },
+        "Authenticated users can update ig posts for their scrapes": {
+          "name": "Authenticated users can update ig posts for their scrapes",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "EXISTS (\n        SELECT 1\n        FROM public.ig_scrapes\n        WHERE ig_scrapes.id = ig_scrape_id\n          AND ig_scrapes.started_by = (SELECT auth.uid() AS uid)\n      )",
+          "withCheck": "EXISTS (\n        SELECT 1\n        FROM public.ig_scrapes\n        WHERE ig_scrapes.id = ig_scrape_id\n          AND ig_scrapes.started_by = (SELECT auth.uid() AS uid)\n      )"
+        }
+      },
+      "checkConstraints": {
+        "ig_posts_post_url_length": {
+          "name": "ig_posts_post_url_length",
+          "value": "char_length(trim(post_url)) >= 1 AND char_length(post_url) <= 2048"
+        },
+        "ig_posts_video_length_secs_non_negative": {
+          "name": "ig_posts_video_length_secs_non_negative",
+          "value": "video_length_secs IS NULL OR video_length_secs >= 0"
+        },
+        "ig_posts_view_count_non_negative": {
+          "name": "ig_posts_view_count_non_negative",
+          "value": "view_count IS NULL OR view_count >= 0"
+        },
+        "ig_posts_save_count_non_negative": {
+          "name": "ig_posts_save_count_non_negative",
+          "value": "save_count IS NULL OR save_count >= 0"
+        },
+        "ig_posts_share_count_non_negative": {
+          "name": "ig_posts_share_count_non_negative",
+          "value": "share_count IS NULL OR share_count >= 0"
+        },
+        "ig_posts_comment_count_non_negative": {
+          "name": "ig_posts_comment_count_non_negative",
+          "value": "comment_count IS NULL OR comment_count >= 0"
+        },
+        "ig_posts_like_count_non_negative": {
+          "name": "ig_posts_like_count_non_negative",
+          "value": "like_count IS NULL OR like_count >= 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.ig_scrapes": {
+      "name": "ig_scrapes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "started_by": {
+          "name": "started_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "apify_called_at": {
+          "name": "apify_called_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "apify_run_id": {
+          "name": "apify_run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ig_username": {
+          "name": "ig_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "profile_picture_url": {
+          "name": "profile_picture_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ig_name": {
+          "name": "ig_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "post_count": {
+          "name": "post_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "requested_post_count": {
+          "name": "requested_post_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "since_when": {
+          "name": "since_when",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ig_scrapes_created_at_idx": {
+          "name": "ig_scrapes_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "ig_scrapes_started_by_idx": {
+          "name": "ig_scrapes_started_by_idx",
+          "columns": [
+            {
+              "expression": "started_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "ig_scrapes_started_by_fkey": {
+          "name": "ig_scrapes_started_by_fkey",
+          "tableFrom": "ig_scrapes",
+          "columnsFrom": [
+            "started_by"
+          ],
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ig_scrapes_apify_run_id_key": {
+          "name": "ig_scrapes_apify_run_id_key",
+          "columns": [
+            "apify_run_id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "Authenticated users can view ig scrapes": {
+          "name": "Authenticated users can view ig scrapes",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "true"
+        },
+        "Authenticated users can insert their own ig scrapes": {
+          "name": "Authenticated users can insert their own ig scrapes",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(( SELECT auth.uid() AS uid) = started_by)"
+        },
+        "Authenticated users can update ig scrapes": {
+          "name": "Authenticated users can update ig scrapes",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(( SELECT auth.uid() AS uid) = started_by)",
+          "withCheck": "(( SELECT auth.uid() AS uid) = started_by)"
+        }
+      },
+      "checkConstraints": {
+        "ig_scrapes_ig_username_format": {
+          "name": "ig_scrapes_ig_username_format",
+          "value": "ig_username = lower(ig_username) AND ig_username ~ '^[a-z0-9._]{1,30}$'"
+        },
+        "ig_scrapes_post_count_non_negative": {
+          "name": "ig_scrapes_post_count_non_negative",
+          "value": "post_count IS NULL OR post_count >= 0"
+        },
+        "ig_scrapes_requested_post_count_non_negative": {
+          "name": "ig_scrapes_requested_post_count_non_negative",
+          "value": "requested_post_count IS NULL OR requested_post_count >= 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.items": {
+      "name": "items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "items_created_at_idx": {
+          "name": "items_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "items_created_by_fkey": {
+          "name": "items_created_by_fkey",
+          "tableFrom": "items",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "Authenticated users can view items": {
+          "name": "Authenticated users can view items",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "true"
+        },
+        "Authenticated users can insert their own items": {
+          "name": "Authenticated users can insert their own items",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(( SELECT auth.uid() AS uid) = created_by)"
+        },
+        "Authenticated users can delete items": {
+          "name": "Authenticated users can delete items",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "true"
+        }
+      },
+      "checkConstraints": {
+        "items_title_length": {
+          "name": "items_title_length",
+          "value": "char_length(trim(title)) >= 1 AND char_length(title) <= 200"
+        }
+      },
+      "isRLSEnabled": true
+    }
+  },
+  "enums": {
+    "public.ig_post_media_type": {
+      "name": "ig_post_media_type",
+      "schema": "public",
+      "values": [
+        "carousel",
+        "short",
+        "static"
+      ]
+    }
+  },
+  "schemas": {},
+  "views": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

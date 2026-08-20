@@ -39,16 +39,18 @@ export type Database = {
           comment_count: number | null
           created_at: string
           description: string | null
+          details_scrape_id: string | null
           first_frame_url: string | null
           id: string
-          ig_scrape_id: string
+          ig_profile_id: string
           like_count: number | null
-          media_type: Database["public"]["Enums"]["ig_post_media_type"]
+          media_type: Database["public"]["Enums"]["ig_post_media_type"] | null
           post_url: string
           save_count: number | null
           share_count: number | null
+          source_scrape_id: string
           thumbnail_url: string | null
-          uploaded_at: string
+          uploaded_at: string | null
           video_embed_url: string | null
           video_length_secs: number | null
           view_count: number | null
@@ -58,16 +60,18 @@ export type Database = {
           comment_count?: number | null
           created_at?: string
           description?: string | null
+          details_scrape_id?: string | null
           first_frame_url?: string | null
           id?: string
-          ig_scrape_id: string
+          ig_profile_id: string
           like_count?: number | null
-          media_type: Database["public"]["Enums"]["ig_post_media_type"]
+          media_type?: Database["public"]["Enums"]["ig_post_media_type"] | null
           post_url: string
           save_count?: number | null
           share_count?: number | null
+          source_scrape_id: string
           thumbnail_url?: string | null
-          uploaded_at: string
+          uploaded_at?: string | null
           video_embed_url?: string | null
           video_length_secs?: number | null
           view_count?: number | null
@@ -77,80 +81,81 @@ export type Database = {
           comment_count?: number | null
           created_at?: string
           description?: string | null
+          details_scrape_id?: string | null
           first_frame_url?: string | null
           id?: string
-          ig_scrape_id?: string
+          ig_profile_id?: string
           like_count?: number | null
-          media_type?: Database["public"]["Enums"]["ig_post_media_type"]
+          media_type?: Database["public"]["Enums"]["ig_post_media_type"] | null
           post_url?: string
           save_count?: number | null
           share_count?: number | null
+          source_scrape_id?: string
           thumbnail_url?: string | null
-          uploaded_at?: string
+          uploaded_at?: string | null
           video_embed_url?: string | null
           video_length_secs?: number | null
           view_count?: number | null
         }
         Relationships: [
           {
-            foreignKeyName: "ig_posts_ig_scrape_id_fkey"
-            columns: ["ig_scrape_id"]
+            foreignKeyName: "ig_posts_details_scrape_id_fkey"
+            columns: ["details_scrape_id"]
             isOneToOne: false
-            referencedRelation: "ig_scrapes"
+            referencedRelation: "scheduled_scrapes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ig_posts_ig_profile_id_fkey"
+            columns: ["ig_profile_id"]
+            isOneToOne: false
+            referencedRelation: "ig_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ig_posts_source_scrape_id_fkey"
+            columns: ["source_scrape_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_scrapes"
             referencedColumns: ["id"]
           },
         ]
       }
-      ig_scrapes: {
+      ig_profiles: {
         Row: {
           created_at: string
+          created_by: string
           description: string | null
-          error_message: string | null
-          finished_at: string | null
           id: string
           ig_name: string | null
-          ig_username: string | null
-          indexing_started_at: string | null
+          ig_username: string
           note: string | null
           post_count: number | null
           profile_picture_url: string | null
-          since_when: string | null
-          source_url: string
-          started_by: string
           updated_at: string
         }
         Insert: {
           created_at?: string
+          created_by: string
           description?: string | null
-          error_message?: string | null
-          finished_at?: string | null
           id?: string
           ig_name?: string | null
-          ig_username?: string | null
-          indexing_started_at?: string | null
+          ig_username: string
           note?: string | null
           post_count?: number | null
           profile_picture_url?: string | null
-          since_when?: string | null
-          source_url: string
-          started_by: string
           updated_at?: string
         }
         Update: {
           created_at?: string
+          created_by?: string
           description?: string | null
-          error_message?: string | null
-          finished_at?: string | null
           id?: string
           ig_name?: string | null
-          ig_username?: string | null
-          indexing_started_at?: string | null
+          ig_username?: string
           note?: string | null
           post_count?: number | null
           profile_picture_url?: string | null
-          since_when?: string | null
-          source_url?: string
-          started_by?: string
           updated_at?: string
         }
         Relationships: []
@@ -176,6 +181,62 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_scrapes: {
+        Row: {
+          apify_called_at: string | null
+          apify_run_id: string | null
+          created_at: string
+          error_message: string | null
+          finished_at: string | null
+          group_id: string
+          id: string
+          ig_profile_id: string
+          requested_post_count: number | null
+          scrape_type: Database["public"]["Enums"]["scheduled_scrape_type"]
+          since_when: string | null
+          started_by: string
+          updated_at: string
+        }
+        Insert: {
+          apify_called_at?: string | null
+          apify_run_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          group_id: string
+          id?: string
+          ig_profile_id: string
+          requested_post_count?: number | null
+          scrape_type: Database["public"]["Enums"]["scheduled_scrape_type"]
+          since_when?: string | null
+          started_by: string
+          updated_at?: string
+        }
+        Update: {
+          apify_called_at?: string | null
+          apify_run_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          group_id?: string
+          id?: string
+          ig_profile_id?: string
+          requested_post_count?: number | null
+          scrape_type?: Database["public"]["Enums"]["scheduled_scrape_type"]
+          since_when?: string | null
+          started_by?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_scrapes_ig_profile_id_fkey"
+            columns: ["ig_profile_id"]
+            isOneToOne: false
+            referencedRelation: "ig_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -186,6 +247,7 @@ export type Database = {
     }
     Enums: {
       ig_post_media_type: "carousel" | "short" | "static"
+      scheduled_scrape_type: "posts" | "reels" | "post_details"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -314,6 +376,7 @@ export const Constants = {
   public: {
     Enums: {
       ig_post_media_type: ["carousel", "short", "static"],
+      scheduled_scrape_type: ["posts", "reels", "post_details"],
     },
   },
 } as const

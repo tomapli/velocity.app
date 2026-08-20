@@ -7,95 +7,63 @@ import { withRollback } from "@/tests/setup/tx";
 const AUTHORIZED_EMAIL = "allowed@example.com";
 const GOOGLE_PICTURE = "https://lh3.googleusercontent.com/a/example-photo";
 
-describe("ig_scrapes", () => {
+describe("ig_profiles", () => {
   describe("RLS", () => {
     it("hides rows from anonymous visitors", async () => {
       await withRollback(async (client) => {
         const auth = await insertAuthUser(client);
         await asClaims(client, { sub: auth.id });
         await client.query(
-          `insert into public.ig_scrapes (ig_username, started_by)
+          `insert into public.ig_profiles (ig_username, created_by)
            values ($1, $2)`,
           ["example", auth.id],
         );
         await asAnon(client);
         await expect(
-          client.query("select count(*)::int as cnt from public.ig_scrapes"),
+          client.query("select count(*)::int as cnt from public.ig_profiles"),
         ).rejects.toThrow(/permission denied/);
       });
     });
 
-    it("lets authenticated users insert their own scrapes", async () => {
+    it("lets authenticated users insert a profile they created", async () => {
       await withRollback(async (client) => {
         const auth = await insertAuthUser(client);
         await asClaims(client, { sub: auth.id });
 
         const { rows } = await client.query(
-          `insert into public.ig_scrapes (ig_username, started_by)
+          `insert into public.ig_profiles (ig_username, created_by)
            values ($1, $2)
-           returning ig_username as "igUsername", started_by as "startedBy"`,
+           returning ig_username as "igUsername", created_by as "createdBy"`,
           ["example", auth.id],
         );
 
         expect(rows[0]).toEqual({
           igUsername: "example",
-          startedBy: auth.id,
+          createdBy: auth.id,
         });
-      });
-    });
-
-    it("rejects inserts where started_by does not match auth uid", async () => {
-      await withRollback(async (client) => {
-        const owner = await insertAuthUser(client);
-        const other = await insertAuthUser(client);
-        await asClaims(client, { sub: owner.id });
-
-        await expect(
-          client.query(
-            `insert into public.ig_scrapes (ig_username, started_by)
-             values ($1, $2)`,
-            ["example", other.id],
-          ),
-        ).rejects.toThrow(/permission denied|violates row-level security/);
       });
     });
   });
 
   describe("constraints", () => {
-    it("stores apify_run_id when the actor is started", async () => {
-      await withRollback(async (client) => {
-        const auth = await insertAuthUser(client);
-        await asClaims(client, { sub: auth.id });
-
-        const { rows } = await client.query(
-          `insert into public.ig_scrapes (ig_username, started_by, apify_run_id, apify_called_at)
-           values ($1, $2, $3, now())
-           returning apify_run_id as "apifyRunId"`,
-          ["example", auth.id, "sxfSOvMdx4kXZjQ0r"],
-        );
-
-        expect(rows[0].apifyRunId).toBe("sxfSOvMdx4kXZjQ0r");
-      });
-    });
-
-    it("rejects duplicate apify_run_id values", async () => {
+    it("rejects duplicate usernames", async () => {
       await withRollback(async (client) => {
         const auth = await insertAuthUser(client);
         await asClaims(client, { sub: auth.id });
 
         await client.query(
-          `insert into public.ig_scrapes (ig_username, started_by, apify_run_id)
-           values ($1, $2, $3)`,
-          ["example", auth.id, "sxfSOvMdx4kXZjQ0r"],
+          `insert into public.ig_profiles (ig_username, created_by)
+           values ($1, $2)`,
+          ["example", auth.id],
         );
 
         await expect(
           client.query(
-            `insert into public.ig_scrapes (ig_username, started_by, apify_run_id)
-             values ($1, $2, $3)`,
-            ["otheruser", auth.id, "sxfSOvMdx4kXZjQ0r"],
+            `insert into public.ig_profiles (ig_username, created_by)
+             values ($1, $2)`,
+            ["example", auth.id],
           ),
-        ).rejects.toThrow(/ig_scrapes_apify_run_id_key/);
+        ).rejects.toThrow(/ig_profiles_ig_username_key/);
       });
     });
 
@@ -106,54 +74,60 @@ describe("ig_scrapes", () => {
 
         await expect(
           client.query(
-            `insert into public.ig_scrapes (ig_username, started_by, post_count)
+            `insert into public.ig_profiles (ig_username, created_by, post_count)
              values ($1, $2, $3)`,
             ["example", auth.id, -1],
           ),
-        ).rejects.toThrow(/ig_scrapes_post_count_non_negative/);
+        ).rejects.toThrow(/ig_profiles_post_count_non_negative/);
       });
     });
+  });
+});
 
-    it("stores scraped profile fields including post_count", async () => {
+describe("scheduled_scrapes", () => {
+  describe("constraints", () => {
+    it("stores apify_run_id when the actor is started", async () => {
       await withRollback(async (client) => {
         const auth = await insertAuthUser(client);
         await asClaims(client, { sub: auth.id });
+        const profileId = await insertProfile(client, auth.id);
 
         const { rows } = await client.query(
-          `insert into public.ig_scrapes (
-             ig_username,
-             started_by,
-             apify_called_at,
-             finished_at,
-             profile_picture_url,
-             ig_name,
-             description,
-             note,
-             post_count
+          `insert into public.scheduled_scrapes (
+             ig_profile_id, started_by, group_id, scrape_type, apify_run_id, apify_called_at
            )
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           returning
-             ig_username as "igUsername",
-             post_count as "postCount",
-             error_message as "errorMessage"`,
-          [
-            "example",
-            auth.id,
-            "2026-08-20T10:00:00.000Z",
-            "2026-08-20T10:05:00.000Z",
-            "https://cdn.example/avatar.jpg",
-            "Example Name",
-            "Bio text",
-            "Team note",
-            128,
-          ],
+           values ($1, $2, $3, $4, $5, now())
+           returning apify_run_id as "apifyRunId"`,
+          [profileId, auth.id, crypto.randomUUID(), "posts", "sxfSOvMdx4kXZjQ0r"],
         );
 
-        expect(rows[0]).toEqual({
-          igUsername: "example",
-          postCount: 128,
-          errorMessage: null,
-        });
+        expect(rows[0].apifyRunId).toBe("sxfSOvMdx4kXZjQ0r");
+      });
+    });
+
+    it("rejects duplicate apify_run_id values", async () => {
+      await withRollback(async (client) => {
+        const auth = await insertAuthUser(client);
+        await asClaims(client, { sub: auth.id });
+        const profileId = await insertProfile(client, auth.id);
+
+        await client.query(
+          `insert into public.scheduled_scrapes (
+             ig_profile_id, started_by, group_id, scrape_type, apify_run_id
+           )
+           values ($1, $2, $3, $4, $5)`,
+          [profileId, auth.id, crypto.randomUUID(), "posts", "sxfSOvMdx4kXZjQ0r"],
+        );
+
+        await expect(
+          client.query(
+            `insert into public.scheduled_scrapes (
+               ig_profile_id, started_by, group_id, scrape_type, apify_run_id
+             )
+             values ($1, $2, $3, $4, $5)`,
+            [profileId, auth.id, crypto.randomUUID(), "reels", "sxfSOvMdx4kXZjQ0r"],
+          ),
+        ).rejects.toThrow(/scheduled_scrapes_apify_run_id_key/);
       });
     });
   });
@@ -212,3 +186,17 @@ describe("authorized_users picture sync", () => {
     });
   });
 });
+
+async function insertProfile(
+  client: Parameters<Parameters<typeof withRollback>[0]>[0],
+  authId: string,
+): Promise<string> {
+  const { rows } = await client.query(
+    `insert into public.ig_profiles (ig_username, created_by)
+     values ($1, $2)
+     returning id`,
+    ["example", authId],
+  );
+
+  return rows[0].id as string;
+}

@@ -15,27 +15,17 @@ import { sql } from "drizzle-orm";
 
 import { authUsers } from "drizzle-orm/supabase";
 
-export const igScrapes = pgTable(
-  "ig_scrapes",
+export const igProfiles = pgTable(
+  "ig_profiles",
   {
     id: uuid().defaultRandom().primaryKey().notNull(),
-    startedBy: uuid("started_by").notNull(),
+    createdBy: uuid("created_by").notNull(),
     createdAt: timestamp("created_at", {
       withTimezone: true,
       mode: "string",
     })
       .defaultNow()
       .notNull(),
-    apifyCalledAt: timestamp("apify_called_at", {
-      withTimezone: true,
-      mode: "string",
-    }),
-    apifyRunId: text("apify_run_id"),
-    finishedAt: timestamp("finished_at", {
-      withTimezone: true,
-      mode: "string",
-    }),
-    errorMessage: text("error_message"),
     igUsername: text("ig_username").notNull(),
     profilePictureUrl: text("profile_picture_url"),
     igName: text("ig_name"),
@@ -50,35 +40,35 @@ export const igScrapes = pgTable(
       .notNull(),
   },
   (table) => [
-    index("ig_scrapes_created_at_idx").on(table.createdAt.desc()),
-    index("ig_scrapes_started_by_idx").on(table.startedBy),
-    unique("ig_scrapes_apify_run_id_key").on(table.apifyRunId),
+    unique("ig_profiles_ig_username_key").on(table.igUsername),
+    index("ig_profiles_created_at_idx").on(table.createdAt.desc()),
+    index("ig_profiles_created_by_idx").on(table.createdBy),
     foreignKey({
-      columns: [table.startedBy],
+      columns: [table.createdBy],
       foreignColumns: [authUsers.id],
-      name: "ig_scrapes_started_by_fkey",
+      name: "ig_profiles_created_by_fkey",
     }).onDelete("cascade"),
     check(
-      "ig_scrapes_ig_username_format",
+      "ig_profiles_ig_username_format",
       sql`ig_username = lower(ig_username) AND ig_username ~ '^[a-z0-9._]{1,30}$'`,
     ),
     check(
-      "ig_scrapes_post_count_non_negative",
+      "ig_profiles_post_count_non_negative",
       sql`post_count IS NULL OR post_count >= 0`,
     ),
-    pgPolicy("Authenticated users can view ig scrapes", {
+    pgPolicy("Authenticated users can view ig profiles", {
       as: "permissive",
       for: "select",
       to: ["authenticated"],
       using: sql`true`,
     }),
-    pgPolicy("Authenticated users can insert their own ig scrapes", {
+    pgPolicy("Authenticated users can insert ig profiles", {
       as: "permissive",
       for: "insert",
       to: ["authenticated"],
-      withCheck: sql`(( SELECT auth.uid() AS uid) = started_by)`,
+      withCheck: sql`(( SELECT auth.uid() AS uid) = created_by)`,
     }),
-    pgPolicy("Authenticated users can update ig scrapes", {
+    pgPolicy("Authenticated users can update ig profiles", {
       as: "permissive",
       for: "update",
       to: ["authenticated"],

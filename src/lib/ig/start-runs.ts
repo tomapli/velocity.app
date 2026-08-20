@@ -1,0 +1,229 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import {
+  APIFY_DETAILS_BATCH_SIZE,
+  APIFY_INSTAGRAM_POST_DETAILS_ACTOR_ID,
+  APIFY_INSTAGRAM_SCRAPER_ACTOR_ID,
+  startActorRun,
+} from "@/lib/apify/client";
+import {
+  instagramProfileDirectUrl,
+  toApifyDateFilter,
+} from "@/lib/apify/instagram-listing";
+import {
+  IG_DEFAULT_REQUESTED_POST_COUNT,
+  IG_REQUESTED_POST_COUNT_MAX,
+} from "@/lib/ig/constants";
+import type { Database } from "@/lib/supabase/database.types";
+import type { Tables } from "@/lib/supabase/tables";
+
+type AppSupabase = SupabaseClient<Database>;
+type ScheduledScrape = Tables<"scheduled_scrapes">;
+
+export interface ListingRunInput {
+  scrapeType: "posts" | "reels";
+  username: string;
+  requestedPostCount: number | null;
+  sinceWhen: string | null;
+}
+
+/**
+ * Starts an apify/instagram-scraper listing run for posts or reels.
+ */
+export async function startListingRun(
+  token: string,
+  input: ListingRunInput,
+) {
+  const resultsLimit = input.sinceWhen
+    ? IG_REQUESTED_POST_COUNT_MAX
+    : (input.requestedPostCount ?? IG_DEFAULT_REQUESTED_POST_COUNT);
+
+  return startActorRun(token, APIFY_INSTAGRAM_SCRAPER_ACTOR_ID, {
+    directUrls: [instagramProfileDirectUrl(input.username)],
+    resultsType: input.scrapeType,
+    resultsLimit,
+    ...(input.sinceWhen
+      ? { onlyPostsNewerThan: toApifyDateFilter(input.sinceWhen) }
+      : {}),
+  });
+}
+
+/**
+ * Starts a post-details run for up to 100 pending URLs in a scrape group.
+ */
+export async function startDetailsBatchForGroup(
+  supabase: AppSupabase,
+  token: string,
+  groupId: string,
+): Promise<ScheduledScrape | null> {
+  const { data: groupScrapes, error: groupError } = await supabase
+    .from("scheduled_scrapes")
+    .select("*")
+    .eq("group_id", groupId);
+
+  if (groupError) {
+    throw groupError;
+  }
+
+  const listingScrapes = (groupScrapes ?? []).filter(
+    (scrape) => scrape.scrape_type === "posts" || scrape.scrape_type === "reels",
+  );
+  if (listingScrapes.length === 0) {
+    return null;
+  }
+
+  const template = listingScrapes[0];
+  const listingIds = listingScrapes.map((scrape) => scrape.id);
+  const remainingSlots = getRemainingDetailSlots(template, await countDetailedPosts(
+    supabase,
+    listingIds,
+  ));
+  if (remainingSlots <= 0) {
+    return null;
+  }
+
+  const pending = await listPendingPostUrls(
+    supabase,
+    listingIds,
+    template.since_when,
+    Math.min(APIFY_DETAILS_BATCH_SIZE, remainingSlots),
+  );
+  if (pending.length === 0) {
+    return null;
+  }
+
+  const { data: detailsScrape, error: insertError } = await supabase
+    .from("scheduled_scrapes")
+    .insert({
+      ig_profile_id: template.ig_profile_id,
+      started_by: template.started_by,
+      group_id: groupId,
+      scrape_type: "post_details",
+      requested_post_count: template.requested_post_count,
+      since_when: template.since_when,
+    })
+    .select("*")
+    .single();
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  try {
+    const run = await startActorRun(token, APIFY_INSTAGRAM_POST_DETAILS_ACTOR_ID, {
+      postUrls: pending.map((post) => post.post_url),
+    });
+    const { data: updated, error: updateError } = await supabase
+      .from("scheduled_scrapes")
+      .update({
+        apify_called_at: new Date().toISOString(),
+        apify_run_id: run.id,
+      })
+      .eq("id", detailsScrape.id)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return updated;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not start Apify";
+    await supabase
+      .from("scheduled_scrapes")
+      .update({
+        error_message: message,
+        finished_at: new Date().toISOString(),
+      })
+      .eq("id", detailsScrape.id);
+    throw error;
+  }
+}
+
+export function shouldContinueDetails(params: {
+  pendingUrlCount: number;
+  detailedPostCount: number;
+  requestedPostCount: number | null;
+  batchHadOlderPost: boolean;
+}): boolean {
+  if (params.batchHadOlderPost || params.pendingUrlCount <= 0) {
+    return false;
+  }
+
+  if (
+    params.requestedPostCount != null &&
+    params.detailedPostCount >= params.requestedPostCount
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+export function listingScrapesAreSettled(scrapes: ScheduledScrape[]): boolean {
+  const listing = scrapes.filter(
+    (scrape) => scrape.scrape_type === "posts" || scrape.scrape_type === "reels",
+  );
+
+  return listing.length >= 2 && listing.every((scrape) => scrape.finished_at);
+}
+
+async function countDetailedPosts(
+  supabase: AppSupabase,
+  listingIds: string[],
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("ig_posts")
+    .select("id", { count: "exact", head: true })
+    .in("source_scrape_id", listingIds)
+    .not("details_scrape_id", "is", null);
+
+  if (error) {
+    throw error;
+  }
+
+  return count ?? 0;
+}
+
+async function listPendingPostUrls(
+  supabase: AppSupabase,
+  listingIds: string[],
+  sinceWhen: string | null,
+  limit: number,
+): Promise<Array<{ id: string; post_url: string }>> {
+  const { data, error } = await supabase
+    .from("ig_posts")
+    .select("id, post_url, uploaded_at")
+    .in("source_scrape_id", listingIds)
+    .is("details_scrape_id", null)
+    .order("uploaded_at", { ascending: false, nullsFirst: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const sinceTimestamp = sinceWhen ? Date.parse(sinceWhen) : null;
+
+  return (data ?? [])
+    .filter((post) => {
+      if (!sinceTimestamp || !post.uploaded_at) {
+        return true;
+      }
+
+      const uploadedAt = Date.parse(post.uploaded_at);
+      return !Number.isFinite(uploadedAt) || uploadedAt >= sinceTimestamp;
+    })
+    .slice(0, limit);
+}
+
+function getRemainingDetailSlots(
+  template: ScheduledScrape,
+  detailedPostCount: number,
+): number {
+  if (template.requested_post_count == null) {
+    return APIFY_DETAILS_BATCH_SIZE;
+  }
+
+  return Math.max(0, template.requested_post_count - detailedPostCount);
+}

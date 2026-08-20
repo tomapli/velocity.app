@@ -5,6 +5,7 @@ import {
   AUTH_LOGIN_PATH,
   DEFAULT_LOGGED_IN_PAGE,
   isPublicRoute,
+  PROXY_AUTHENTICATED_USER_ID_HEADER,
 } from "@/lib/constants/auth";
 import { redirectWithCookies } from "@/lib/auth-helpers";
 import { validateRedirectUrl } from "@/lib/utils";
@@ -83,6 +84,25 @@ export async function updateSession(request: NextRequest) {
     url.searchParams.set("next", fullPath);
     return redirectWithCookies(url, supabaseResponse);
   }
+
+  const userId = claims.sub;
+  if (typeof userId !== "string") {
+    const url = request.nextUrl.clone();
+    url.pathname = AUTH_LOGIN_PATH;
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("next", fullPath);
+    return redirectWithCookies(url, supabaseResponse);
+  }
+
+  requestHeaders.set(PROXY_AUTHENTICATED_USER_ID_HEADER, userId);
+  const sessionCookies = supabaseResponse.cookies.getAll();
+  supabaseResponse = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+  sessionCookies.forEach(({ name, value, ...options }) =>
+    supabaseResponse.cookies.set(name, value, options),
+  );
 
   return supabaseResponse;
 }
