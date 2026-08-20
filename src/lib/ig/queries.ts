@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { groupScheduledScrapes, type IgScrapeJob } from "@/lib/ig/groups";
 import type { Database } from "@/lib/supabase/database.types";
+import { throwQueryError } from "@/lib/supabase/throw-query-error";
 import type { Tables } from "@/lib/supabase/tables";
 
 export type IgProfile = Tables<"ig_profiles">;
@@ -31,10 +32,10 @@ export async function listIgScrapeJobs(
     ]);
 
   if (scrapesError) {
-    throw scrapesError;
+    return throwQueryError(scrapesError);
   }
   if (profilesError) {
-    throw profilesError;
+    return throwQueryError(profilesError);
   }
 
   return groupScheduledScrapes(
@@ -57,7 +58,7 @@ export async function getIgProfileByUsername(
     .maybeSingle();
 
   if (error) {
-    throw error;
+    return throwQueryError(error);
   }
 
   return data;
@@ -82,7 +83,7 @@ export async function getLatestIgScrapeJobForUsername(
     .order("created_at", { ascending: false });
 
   if (error) {
-    throw error;
+    return throwQueryError(error);
   }
 
   return groupScheduledScrapes(data ?? [], new Map([[profile.id, profile]]))[0] ?? null;
@@ -103,7 +104,7 @@ export async function listIgPostsForProfile(
     .order("uploaded_at", { ascending: false });
 
   if (error) {
-    throw error;
+    return throwQueryError(error);
   }
 
   return data ?? [];
@@ -130,7 +131,7 @@ export async function getIgPostForUsername(
     .maybeSingle();
 
   if (error) {
-    throw error;
+    return throwQueryError(error);
   }
 
   return data;
@@ -164,7 +165,7 @@ export async function upsertIgProfile(
       return raced;
     }
 
-    throw error;
+    return throwQueryError(error);
   }
 
   return data;

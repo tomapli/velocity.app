@@ -418,51 +418,12 @@ mark[data-color="orange"] { background-color: #fdba74; }
 }
 
 /* ── Copilot search bar — Instagram-style gradient ────────────────────────── */
-@property --copilot-angle {
-  syntax: "<angle>";
-  initial-value: 135deg;
-  inherits: true;
-}
-
 .copilot-gradient-shell {
   --copilot-purple: oklch(0.38 0.16 300);
   --copilot-magenta: oklch(0.48 0.2 330);
   --copilot-coral: oklch(0.55 0.24 15);
   --copilot-orange: oklch(0.65 0.19 48);
   --copilot-gold: oklch(0.72 0.15 70);
-  --copilot-angle: 135deg;
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  background: linear-gradient(
-    var(--copilot-angle),
-    var(--copilot-purple),
-    var(--copilot-magenta),
-    var(--copilot-coral),
-    var(--copilot-orange),
-    var(--copilot-gold),
-    var(--copilot-purple)
-  );
-}
-
-.copilot-gradient-shell::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    var(--copilot-angle),
-    var(--copilot-purple),
-    var(--copilot-magenta),
-    var(--copilot-coral),
-    var(--copilot-orange),
-    var(--copilot-gold),
-    var(--copilot-purple)
-  );
-  filter: blur(20px);
-  opacity: 0.45;
-  z-index: 0;
-  pointer-events: none;
 }
 
 .dark .copilot-gradient-shell {
@@ -473,18 +434,62 @@ mark[data-color="orange"] { background-color: #fdba74; }
   --copilot-gold: oklch(0.75 0.15 70);
 }
 
+.copilot-gradient {
+  background: conic-gradient(
+    from 0deg,
+    var(--copilot-purple),
+    var(--copilot-magenta),
+    var(--copilot-coral),
+    var(--copilot-orange),
+    var(--copilot-gold),
+    var(--copilot-purple)
+  );
+}
+
+/*
+ * Square layer centered on the pill. Parent must use overflow:hidden so only
+ * the border ring (or the blurred aura silhouette) remains visible.
+ */
+.copilot-gradient-spin-layer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(140%, 12rem);
+  aspect-ratio: 1 / 1;
+  translate: -50% -50%;
+}
+
+/* Soft halo of the border only — same colors/angle, no filled wash. */
+.copilot-gradient-aura {
+  z-index: 0;
+  opacity: 1;
+  filter: blur(22px);
+}
+
 @media (prefers-reduced-motion: no-preference) {
   @keyframes copilot-gradient-spin {
-    to { --copilot-angle: 495deg; }
+    to { transform: rotate(360deg); }
   }
 
-  .copilot-gradient-shell {
+  .copilot-gradient-rotate {
     animation: copilot-gradient-spin 6s linear infinite;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .copilot-gradient-shell::before {
+  .copilot-gradient-ring {
+    background: linear-gradient(
+      135deg,
+      var(--copilot-purple),
+      var(--copilot-magenta),
+      var(--copilot-coral),
+      var(--copilot-orange),
+      var(--copilot-gold)
+    );
+  }
+
+  .copilot-gradient-spin-layer,
+  .copilot-gradient-aura {
     display: none;
   }
 }

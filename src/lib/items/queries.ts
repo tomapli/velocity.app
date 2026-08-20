@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/supabase/database.types";
+import { throwQueryError } from "@/lib/supabase/throw-query-error";
 import type { Tables } from "@/lib/supabase/tables";
 
 export type Item = Tables<"items">;
@@ -17,7 +18,7 @@ export async function listItems(
     .order("created_at", { ascending: false });
 
   if (error) {
-    throw error;
+    return throwQueryError(error);
   }
 
   return data ?? [];
@@ -40,7 +41,7 @@ export async function createItem(
     .single();
 
   if (error) {
-    throw error;
+    return throwQueryError(error);
   }
 
   return data;
@@ -56,6 +57,6 @@ export async function deleteItem(
   const { error } = await supabase.from("items").delete().eq("id", id);
 
   if (error) {
-    throw error;
+    return throwQueryError(error);
   }
 }

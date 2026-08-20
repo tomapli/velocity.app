@@ -10,6 +10,50 @@ import {
 import { redirectWithCookies } from "@/lib/auth-helpers";
 import { validateRedirectUrl } from "@/lib/utils";
 
+/**
+ * Builds the Next.js response that forwards request cookies/headers to RSC.
+ */
+const createProxyResponse = (
+  request: NextRequest,
+  requestHeaders: Headers,
+): NextResponse =>
+  NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+
+/**
+ * Copies Set-Cookie values onto a newly created proxy response.
+ */
+const copyResponseCookies = (
+  from: NextResponse,
+  to: NextResponse,
+): void => {
+  from.cookies.getAll().forEach(({ name, value, ...options }) => {
+    to.cookies.set(name, value, options);
+  });
+};
+
+/**
+ * Redirects unauthenticated users to login, preserving the intended destination.
+ */
+const redirectToLogin = (
+  request: NextRequest,
+  supabaseResponse: NextResponse,
+  fullPath: string,
+): NextResponse => {
+  const url = request.nextUrl.clone();
+  url.pathname = AUTH_LOGIN_PATH;
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("next", fullPath);
+  return redirectWithCookies(url, supabaseResponse);
+};
+
+/**
+ * Refreshes the Auth session from cookies and gates non-public routes.
+ * Expired/invalid JWTs are cleared locally and redirected to login instead of
+ * reaching Server Components (which would throw PGRST303 from PostgREST).
+ */
 export async function updateSession(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set(
@@ -17,9 +61,7 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname + request.nextUrl.search,
   );
 
-  let supabaseResponse = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
+  let supabaseResponse = createProxyResponse(request, requestHeaders);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,9 +75,7 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
-          supabaseResponse = NextResponse.next({
-            request: { headers: requestHeaders },
-          });
+          supabaseResponse = createProxyResponse(request, requestHeaders);
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           );
@@ -47,14 +87,30 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  const { data } = await supabase.auth.getClaims();
+  const { data, error: claimsError } = await supabase.auth.getClaims();
   const claims = data?.claims;
+
+  // Refresh failed or JWT unusable — drop stale cookies so RSC never sees them.
+  if (claimsError || !claims) {
+    if (claimsError) {
+      await supabase.auth.signOut({ scope: "local" });
+    }
+
+    const pathname = request.nextUrl.pathname;
+    const fullPath = pathname + request.nextUrl.search + request.nextUrl.hash;
+
+    if (isPublicRoute(pathname)) {
+      return supabaseResponse;
+    }
+
+    return redirectToLogin(request, supabaseResponse, fullPath);
+  }
 
   const pathname = request.nextUrl.pathname;
   const fullPath = pathname + request.nextUrl.search + request.nextUrl.hash;
 
   if (isPublicRoute(pathname)) {
-    if (pathname === AUTH_LOGIN_PATH && claims) {
+    if (pathname === AUTH_LOGIN_PATH) {
       const {
         data: { user },
         error,
@@ -76,33 +132,15 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (!claims) {
-    const url = request.nextUrl.clone();
-    url.pathname = AUTH_LOGIN_PATH;
-    url.search = "";
-    url.hash = "";
-    url.searchParams.set("next", fullPath);
-    return redirectWithCookies(url, supabaseResponse);
-  }
-
   const userId = claims.sub;
   if (typeof userId !== "string") {
-    const url = request.nextUrl.clone();
-    url.pathname = AUTH_LOGIN_PATH;
-    url.search = "";
-    url.hash = "";
-    url.searchParams.set("next", fullPath);
-    return redirectWithCookies(url, supabaseResponse);
+    await supabase.auth.signOut({ scope: "local" });
+    return redirectToLogin(request, supabaseResponse, fullPath);
   }
 
   requestHeaders.set(PROXY_AUTHENTICATED_USER_ID_HEADER, userId);
-  const sessionCookies = supabaseResponse.cookies.getAll();
-  supabaseResponse = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
-  sessionCookies.forEach(({ name, value, ...options }) =>
-    supabaseResponse.cookies.set(name, value, options),
-  );
+  const nextResponse = createProxyResponse(request, requestHeaders);
+  copyResponseCookies(supabaseResponse, nextResponse);
 
-  return supabaseResponse;
+  return nextResponse;
 }
