@@ -26,6 +26,21 @@ export const ENV_WHEN = {
 /** @type {RequiredDevEnvVar[]} */
 export const REQUIRED_DEV_ENV = [
   {
+    key: 'GOOGLE_CLIENT_ID',
+    when: ENV_WHEN.BEFORE_SUPABASE,
+    prompt: true,
+    keepOnEmpty: true,
+    description: 'Google OAuth client ID for Sign in with Google',
+    helpUrl: 'https://console.cloud.google.com/apis/credentials',
+  },
+  {
+    key: 'GOOGLE_CLIENT_SECRET',
+    when: ENV_WHEN.BEFORE_SUPABASE,
+    prompt: true,
+    description: 'Google OAuth client secret',
+    helpUrl: 'https://console.cloud.google.com/apis/credentials',
+  },
+  {
     key: 'NEXT_PUBLIC_SUPABASE_URL',
     when: ENV_WHEN.AFTER_SUPABASE,
     prompt: false,

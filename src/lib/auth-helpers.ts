@@ -1,5 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { DEFAULT_LOGGED_IN_PAGE } from "@/lib/constants/auth";
+
+import { isUnauthorizedSignupError } from "@/lib/auth/errors";
+import {
+  AUTH_ERROR_PATH,
+  AUTH_UNAUTHORIZED_PATH,
+  DEFAULT_LOGGED_IN_PAGE,
+} from "@/lib/constants/auth";
 import { validateRedirectUrl } from "@/lib/utils";
 
 /**
@@ -7,9 +13,28 @@ import { validateRedirectUrl } from "@/lib/utils";
  */
 export function createErrorUrl(request: NextRequest, errorMessage: string): URL {
   const url = request.nextUrl.clone();
-  url.pathname = "/auth/error";
+  url.pathname = AUTH_ERROR_PATH;
+  url.search = "";
   url.searchParams.set("error", errorMessage);
   return url;
+}
+
+/**
+ * Routes allowlist rejections to the dedicated page; other failures to /auth/error.
+ */
+export function createAuthFailureUrl(
+  request: NextRequest,
+  errorMessage: string,
+): URL {
+  if (isUnauthorizedSignupError(errorMessage)) {
+    const url = request.nextUrl.clone();
+    url.pathname = AUTH_UNAUTHORIZED_PATH;
+    url.search = "";
+    url.hash = "";
+    return url;
+  }
+
+  return createErrorUrl(request, errorMessage);
 }
 
 /**

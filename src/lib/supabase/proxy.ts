@@ -1,7 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { isPublicRoute, DEFAULT_LOGGED_IN_PAGE } from "@/lib/constants/auth";
+import {
+  AUTH_LOGIN_PATH,
+  DEFAULT_LOGGED_IN_PAGE,
+  isPublicRoute,
+} from "@/lib/constants/auth";
 import { redirectWithCookies } from "@/lib/auth-helpers";
 import { validateRedirectUrl } from "@/lib/utils";
 
@@ -49,7 +53,7 @@ export async function updateSession(request: NextRequest) {
   const fullPath = pathname + request.nextUrl.search + request.nextUrl.hash;
 
   if (isPublicRoute(pathname)) {
-    if (pathname === "/auth/login" && claims) {
+    if (pathname === AUTH_LOGIN_PATH && claims) {
       const {
         data: { user },
         error,
@@ -73,7 +77,7 @@ export async function updateSession(request: NextRequest) {
 
   if (!claims) {
     const url = request.nextUrl.clone();
-    url.pathname = "/auth/login";
+    url.pathname = AUTH_LOGIN_PATH;
     url.search = "";
     url.hash = "";
     url.searchParams.set("next", fullPath);

@@ -206,7 +206,7 @@ const main = async () => {
   ensureEnvLocalExists();
 
   let envVars = readEnvLocal();
-  const oauthSetupIncompleteAtStart = false;
+  const oauthSetupIncompleteAtStart = !hasEnvValue(envVars.GOOGLE_CLIENT_SECRET);
   const requiredBeforeSupabase = getRequiredDevEnvByWhen(ENV_WHEN.BEFORE_SUPABASE);
 
   for (const entry of requiredBeforeSupabase) {

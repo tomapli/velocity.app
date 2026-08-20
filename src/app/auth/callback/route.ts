@@ -1,23 +1,30 @@
-import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
 import {
-  createErrorUrl,
+  createAuthFailureUrl,
   redirectWithCookies,
 } from "@/lib/auth-helpers";
-import { validateRedirectUrl } from "@/lib/utils";
 import { DEFAULT_LOGGED_IN_PAGE } from "@/lib/constants/auth";
+import { validateRedirectUrl } from "@/lib/utils";
 
 /**
- * Exchanges an auth code for a session (OAuth or email links).
+ * Exchanges an auth code for a session (OAuth). Allowlist rejections land on
+ * /auth/unauthorized; other failures go to /auth/error.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next");
+  const oauthError =
+    searchParams.get("error_description") ?? searchParams.get("error");
+
+  if (oauthError) {
+    return NextResponse.redirect(createAuthFailureUrl(request, oauthError));
+  }
 
   if (!code) {
-    return NextResponse.redirect(createErrorUrl(request, "No code provided"));
+    return NextResponse.redirect(createAuthFailureUrl(request, "No code provided"));
   }
 
   let supabaseResponse = NextResponse.next({
@@ -50,7 +57,7 @@ export async function GET(request: NextRequest) {
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
     return redirectWithCookies(
-      createErrorUrl(request, error.message),
+      createAuthFailureUrl(request, error.message),
       supabaseResponse,
     );
   }

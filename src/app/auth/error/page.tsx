@@ -1,7 +1,10 @@
-import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
 import { Suspense } from "react";
 import Link from "next/link";
+
+import { AuthPageShell } from "@/components/auth/auth-page-shell";
+import { Button } from "@/components/ui/button";
+import { AUTH_LOGIN_PATH } from "@/lib/constants/auth";
 
 async function ErrorContent({
   searchParams,
@@ -12,31 +15,29 @@ async function ErrorContent({
   const error = params?.error || "";
 
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-md">
-        <div className="flex flex-col items-center gap-6 text-center">
-          <div className="rounded-full bg-muted p-6 text-destructive">
-            <AlertCircle className="size-12" />
-          </div>
-          <div className="space-y-2">
-            <h1 className="font-heading text-3xl font-bold">Something went wrong</h1>
-            <p className="text-muted-foreground">
-              Authentication did not complete. Try signing in again.
+    <AuthPageShell>
+      <div className="flex flex-col items-center gap-6 text-center">
+        <div className="rounded-full bg-muted p-6 text-destructive">
+          <AlertCircle className="size-12" aria-hidden="true" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="font-heading text-3xl font-bold">Something went wrong</h1>
+          <p className="text-muted-foreground">
+            Authentication did not complete. Try signing in again.
+          </p>
+        </div>
+        {error ? (
+          <div className="w-full rounded-lg border border-border bg-muted/50 p-4">
+            <p className="text-left font-mono text-xs text-muted-foreground wrap-break-word">
+              {error}
             </p>
           </div>
-          {error ? (
-            <div className="w-full rounded-lg border border-border bg-muted/50 p-4">
-              <p className="text-left font-mono text-xs text-muted-foreground wrap-break-word">
-                {error}
-              </p>
-            </div>
-          ) : null}
-          <Button asChild size="lg" className="w-full">
-            <Link href="/auth/login">Back to sign in</Link>
-          </Button>
-        </div>
+        ) : null}
+        <Button asChild size="lg" className="w-full">
+          <Link href={AUTH_LOGIN_PATH}>Back to sign in</Link>
+        </Button>
       </div>
-    </div>
+    </AuthPageShell>
   );
 }
 
