@@ -14,19 +14,76 @@ export type Database = {
           created_at: string
           email: string
           id: string
+          picture_url: string | null
           user_id: string | null
         }
         Insert: {
           created_at?: string
           email: string
           id?: string
+          picture_url?: string | null
           user_id?: string | null
         }
         Update: {
           created_at?: string
           email?: string
           id?: string
+          picture_url?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      ig_scrapes: {
+        Row: {
+          created_at: string
+          description: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          ig_name: string | null
+          ig_username: string | null
+          indexing_started_at: string | null
+          note: string | null
+          post_count: number | null
+          profile_picture_url: string | null
+          since_when: string | null
+          source_url: string
+          started_by: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          ig_name?: string | null
+          ig_username?: string | null
+          indexing_started_at?: string | null
+          note?: string | null
+          post_count?: number | null
+          profile_picture_url?: string | null
+          since_when?: string | null
+          source_url: string
+          started_by: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          ig_name?: string | null
+          ig_username?: string | null
+          indexing_started_at?: string | null
+          note?: string | null
+          post_count?: number | null
+          profile_picture_url?: string | null
+          since_when?: string | null
+          source_url?: string
+          started_by?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -57,6 +114,7 @@ export type Database = {
     }
     Functions: {
       before_user_created_hook: { Args: { event: Json }; Returns: Json }
+      extract_auth_user_picture: { Args: { meta: Json }; Returns: string }
     }
     Enums: {
       [_ in never]: never

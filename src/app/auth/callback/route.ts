@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { withLoginIntro } from "@/lib/auth/login-intro";
+import { syncAuthorizedUserPicture } from "@/lib/auth/sync-authorized-user-picture";
 import {
   createAuthFailureUrl,
   createSuccessUrl,
@@ -60,6 +61,14 @@ export async function GET(request: NextRequest) {
       createAuthFailureUrl(request, error.message),
       supabaseResponse,
     );
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    await syncAuthorizedUserPicture(user.id);
   }
 
   return redirectWithCookies(

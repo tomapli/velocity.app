@@ -18,6 +18,7 @@ export const authorizedUsers = pgTable(
     id: uuid().defaultRandom().primaryKey().notNull(),
     email: text().notNull(),
     userId: uuid("user_id"),
+    pictureUrl: text("picture_url"),
     createdAt: timestamp("created_at", {
       withTimezone: true,
       mode: "string",
