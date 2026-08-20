@@ -20,11 +20,27 @@ export const DEFAULT_LOGGED_IN_PAGE = "/";
 export const AUTH_OAUTH_PROVIDER = "google" as const;
 
 /**
- * Must match `public.before_user_created_hook`.
+ * Must match `public.before_user_created_hook` and
+ * `public.custom_access_token_hook`.
  */
 export const UNAUTHORIZED_SIGNUP_MESSAGE =
   "This email is not authorized to access the app.";
 
+/**
+ * JWT claim set by `public.custom_access_token_hook` when the user is allowlisted.
+ */
+export const APP_AUTHORIZED_CLAIM = "app_authorized" as const;
+
+/**
+ * Private realtime topic for per-user access revocation.
+ * Pattern: `user:{userId}:auth`
+ */
+export const authAccessRealtimeTopic = (userId: string): string =>
+  `user:${userId}:auth`;
+
+export const AUTH_ACCESS_REALTIME_EVENTS = {
+  ACCESS_REVOKED: "access_revoked",
+} as const;
 /**
  * Query flag set after a successful OAuth login so the intro video can play once.
  */

@@ -243,6 +243,7 @@ export type Database = {
     }
     Functions: {
       before_user_created_hook: { Args: { event: Json }; Returns: Json }
+      custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       extract_auth_user_picture: { Args: { meta: Json }; Returns: string }
     }
     Enums: {

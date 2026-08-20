@@ -3,10 +3,12 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import {
   AUTH_LOGIN_PATH,
+  AUTH_UNAUTHORIZED_PATH,
   DEFAULT_LOGGED_IN_PAGE,
   isPublicRoute,
   PROXY_AUTHENTICATED_USER_ID_HEADER,
 } from "@/lib/constants/auth";
+import { hasAppAuthorizedClaim } from "@/lib/auth/claims";
 import { redirectWithCookies } from "@/lib/auth-helpers";
 import { validateRedirectUrl } from "@/lib/utils";
 
@@ -50,9 +52,25 @@ const redirectToLogin = (
 };
 
 /**
+ * Clears the local session and sends allowlist rejections to the unauthorized page.
+ */
+const redirectUnauthorized = (
+  request: NextRequest,
+  supabaseResponse: NextResponse,
+): NextResponse => {
+  const url = request.nextUrl.clone();
+  url.pathname = AUTH_UNAUTHORIZED_PATH;
+  url.search = "";
+  url.hash = "";
+  return redirectWithCookies(url, supabaseResponse);
+};
+
+/**
  * Refreshes the Auth session from cookies and gates non-public routes.
  * Expired/invalid JWTs are cleared locally and redirected to login instead of
  * reaching Server Components (which would throw PGRST303 from PostgREST).
+ * Allowlist membership is read from the JWT `app_authorized` claim (set by the
+ * custom access token hook) — no extra database round-trip on navigation.
  */
 export async function updateSession(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
@@ -88,7 +106,7 @@ export async function updateSession(request: NextRequest) {
   );
 
   const { data, error: claimsError } = await supabase.auth.getClaims();
-  const claims = data?.claims;
+  const claims = data?.claims as Record<string, unknown> | undefined;
 
   // Refresh failed or JWT unusable — drop stale cookies so RSC never sees them.
   if (claimsError || !claims) {
@@ -108,15 +126,11 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const fullPath = pathname + request.nextUrl.search + request.nextUrl.hash;
+  const isAuthorized = hasAppAuthorizedClaim(claims);
 
   if (isPublicRoute(pathname)) {
     if (pathname === AUTH_LOGIN_PATH) {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
-
-      if (!error && user) {
+      if (isAuthorized) {
         const next = request.nextUrl.searchParams.get("next");
         const origin = request.nextUrl.origin;
         const validatedNext = next ? validateRedirectUrl(next, origin) : null;
@@ -130,6 +144,11 @@ export async function updateSession(request: NextRequest) {
       }
     }
     return supabaseResponse;
+  }
+
+  if (!isAuthorized) {
+    await supabase.auth.signOut({ scope: "local" });
+    return redirectUnauthorized(request, supabaseResponse);
   }
 
   const userId = claims.sub;

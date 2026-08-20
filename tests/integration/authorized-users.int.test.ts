@@ -16,6 +16,18 @@ function hookEvent(email: string) {
   };
 }
 
+function accessTokenEvent(userId: string, email: string) {
+  return {
+    user_id: userId,
+    claims: {
+      sub: userId,
+      email,
+      role: "authenticated",
+    },
+    authentication_method: "oauth",
+  };
+}
+
 describe("authorized_users", () => {
   describe("RLS", () => {
     it("hides rows from anonymous visitors", async () => {
@@ -93,6 +105,79 @@ describe("authorized_users", () => {
         );
 
         expect(rows[0].result).toEqual({});
+      });
+    });
+  });
+
+  describe("custom_access_token_hook", () => {
+    it("rejects tokens when the user is not on the allowlist", async () => {
+      await withRollback(async (client) => {
+        const auth = await insertAuthUser(client, {
+          email: UNAUTHORIZED_SIGNUP_EMAIL,
+        });
+        const { rows } = await client.query(
+          "select public.custom_access_token_hook($1::jsonb) as result",
+          [
+            JSON.stringify(
+              accessTokenEvent(auth.id, UNAUTHORIZED_SIGNUP_EMAIL),
+            ),
+          ],
+        );
+
+        expect(rows[0].result).toEqual({
+          error: {
+            message: "This email is not authorized to access the app.",
+            http_code: 403,
+          },
+        });
+      });
+    });
+
+    it("adds app_authorized when the user is linked on the allowlist", async () => {
+      await withRollback(async (client) => {
+        await insertAuthorizedUser(client, { email: AUTHORIZED_SIGNUP_EMAIL });
+        const auth = await insertAuthUser(client, {
+          email: AUTHORIZED_SIGNUP_EMAIL,
+        });
+        const { rows } = await client.query(
+          "select public.custom_access_token_hook($1::jsonb) as result",
+          [
+            JSON.stringify(
+              accessTokenEvent(auth.id, AUTHORIZED_SIGNUP_EMAIL),
+            ),
+          ],
+        );
+
+        expect(rows[0].result).toMatchObject({
+          claims: {
+            sub: auth.id,
+            email: AUTHORIZED_SIGNUP_EMAIL,
+            app_authorized: true,
+          },
+        });
+      });
+    });
+  });
+
+  describe("access revocation broadcast", () => {
+    it("broadcasts when an allowlisted user is deleted", async () => {
+      await withRollback(async (client) => {
+        await insertAuthorizedUser(client, { email: AUTHORIZED_SIGNUP_EMAIL });
+        const auth = await insertAuthUser(client, {
+          email: AUTHORIZED_SIGNUP_EMAIL,
+        });
+
+        await client.query(
+          "delete from public.authorized_users where user_id = $1",
+          [auth.id],
+        );
+
+        // Stub realtime.send is a no-op; success means the trigger ran without error.
+        const { rows } = await client.query(
+          "select count(*)::int as cnt from public.authorized_users where user_id = $1",
+          [auth.id],
+        );
+        expect(rows[0].cnt).toBe(0);
       });
     });
   });

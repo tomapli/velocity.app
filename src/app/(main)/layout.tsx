@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 
+import { AuthAccessGuard } from "@/components/auth/auth-access-guard";
 import { LoginIntroOverlay } from "@/components/auth/login-intro-overlay";
 import { AppHeaderBrand } from "@/components/brand/app-header-brand";
 import { LogoutButton } from "@/components/logout-button";
@@ -15,6 +16,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
+      {user ? <AuthAccessGuard userId={user.id} /> : null}
       <Suspense fallback={null}>
         <LoginIntroOverlay />
       </Suspense>
