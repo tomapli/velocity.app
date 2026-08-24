@@ -30,7 +30,13 @@ export function buildIgSearchOptions(
 ): IgSearchOption[] {
   const trimmed = query.trim();
   if (!trimmed) {
-    return [];
+    return uniqueByUsername(profiles).map((profile) => ({
+      id: `existing:${profile.ig_username}`,
+      kind: "existing",
+      username: profile.ig_username,
+      displayName: profile.ig_name,
+      exact: false,
+    }));
   }
 
   const parsed = parseIgSearchInput(trimmed);

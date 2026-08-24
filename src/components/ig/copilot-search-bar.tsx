@@ -44,10 +44,6 @@ export function CopilotSearchBar({
     inputRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [value]);
-
   const selectOption = (option: IgSearchOption) => {
     onSelect(option);
     setIsOpen(false);
@@ -88,6 +84,11 @@ export function CopilotSearchBar({
     <form onSubmit={handleSubmit} className="mx-auto w-full max-w-2xl">
       <div className="copilot-gradient-shell relative p-5">
         <div
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              setIsOpen(false);
+            }
+          }}
           className={cn(
             "relative cursor-pointer",
             "origin-center transition-transform duration-200 ease-out",
@@ -112,20 +113,23 @@ export function CopilotSearchBar({
             >
               <div className="copilot-gradient copilot-gradient-spin-layer copilot-gradient-rotate" />
             </div>
-            <div className="relative z-10 flex cursor-pointer items-center rounded-[calc(2rem-3px)] bg-background px-4 py-3 sm:px-5 sm:py-4">
+            <div
+              className="relative z-10 flex cursor-pointer items-center rounded-[calc(2rem-3px)] bg-background px-4 py-3 sm:px-5 sm:py-4"
+              onClick={() => {
+                inputRef.current?.focus();
+                setIsOpen(true);
+              }}
+            >
               <input
                 ref={inputRef}
                 type="text"
                 value={value}
                 onChange={(event) => {
                   onChange(event.target.value);
+                  setActiveIndex(0);
                   setIsOpen(true);
                 }}
                 onFocus={() => setIsOpen(true)}
-                onBlur={() => {
-                  // Defer so option click can fire before the list unmounts.
-                  window.setTimeout(() => setIsOpen(false), 120);
-                }}
                 onKeyDown={handleKeyDown}
                 placeholder={placeholder}
                 disabled={disabled}
@@ -169,6 +173,7 @@ export function CopilotSearchBar({
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => selectOption(option)}
                       onMouseEnter={() => setActiveIndex(index)}
+                      onFocus={() => setActiveIndex(index)}
                       className={cn(
                         "h-auto w-full justify-start gap-3 rounded-none px-4 py-3 text-left",
                         isActive && "bg-accent text-accent-foreground",

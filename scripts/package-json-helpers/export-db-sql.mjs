@@ -213,7 +213,7 @@ function dumpPublicSchema(databaseUrl) {
 
     throw new Error(
       "Failed to dump public schema with pg_dump.\n" +
-        "Ensure pg_dump is on PATH and matches the local Supabase Postgres major version.\n" +
+        "Run `mise install` to install the matching Postgres client.\n" +
         detail,
     );
   }

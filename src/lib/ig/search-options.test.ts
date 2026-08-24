@@ -9,8 +9,30 @@ const PROFILES = [
 ];
 
 describe("buildIgSearchOptions", () => {
-  it("returns no options for empty input", () => {
-    expect(buildIgSearchOptions("   ", PROFILES)).toEqual([]);
+  it("returns every existing profile for empty input", () => {
+    expect(buildIgSearchOptions("   ", PROFILES)).toEqual([
+      {
+        id: "existing:saunia_cz",
+        kind: "existing",
+        username: "saunia_cz",
+        displayName: "Saunia",
+        exact: false,
+      },
+      {
+        id: "existing:salori.cz",
+        kind: "existing",
+        username: "salori.cz",
+        displayName: "Salori",
+        exact: false,
+      },
+      {
+        id: "existing:velocity",
+        kind: "existing",
+        username: "velocity",
+        displayName: null,
+        exact: false,
+      },
+    ]);
   });
 
   it("puts an exact existing match first and marks it exact", () => {
