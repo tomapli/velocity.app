@@ -65,6 +65,7 @@ export function mapInstagramListingItem(value: unknown): InstagramListingItem | 
 
 export function mapInstagramListingProfile(
   value: unknown,
+  expectedUsername: string,
 ): Updatable<"ig_profiles"> {
   const parsed = ListingItemSchema.safeParse(value);
   if (!parsed.success) {
@@ -72,12 +73,24 @@ export function mapInstagramListingProfile(
   }
 
   const item = parsed.data;
+  const ownerUsername = item.ownerUsername ?? item.username;
+  if (!usernamesMatch(ownerUsername, expectedUsername)) {
+    return {};
+  }
+
   return {
     profile_picture_url: item.profilePicUrlHD ?? item.profilePicUrl ?? null,
     ig_name: item.ownerFullName ?? null,
     description: item.biography ?? null,
     post_count: item.postsCount ?? null,
   };
+}
+
+function usernamesMatch(
+  actualUsername: string | null | undefined,
+  expectedUsername: string,
+): boolean {
+  return actualUsername?.trim().toLowerCase() === expectedUsername.trim().toLowerCase();
 }
 
 export function toPendingIgPost(

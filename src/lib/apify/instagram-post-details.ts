@@ -168,6 +168,7 @@ export function toInstagramPostDetailsUpdate(
 
 export function mapInstagramDetailsProfile(
   value: unknown,
+  expectedUsername: string,
 ): Updatable<"ig_profiles"> {
   const parsed = ApifyInstagramPostDetailsSchema.safeParse(value);
   if (!parsed.success) {
@@ -175,6 +176,13 @@ export function mapInstagramDetailsProfile(
   }
 
   const user = parsed.data.user;
+  if (
+    user?.username?.trim().toLowerCase() !==
+    expectedUsername.trim().toLowerCase()
+  ) {
+    return {};
+  }
+
   return {
     profile_picture_url: user?.profile_pic_url_hd ?? user?.profile_pic_url ?? null,
     ig_name: user?.full_name ?? null,

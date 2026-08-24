@@ -67,18 +67,35 @@ describe("getInstagramShortcode", () => {
 describe("mapInstagramListingProfile", () => {
   it("maps owner fields from a listing item", () => {
     expect(
-      mapInstagramListingProfile({
-        biography: "Bio",
-        ownerFullName: "Velocity",
-        postsCount: 12,
-        profilePicUrlHD: "https://example.com/hd.jpg",
-      }),
+      mapInstagramListingProfile(
+        {
+          biography: "Bio",
+          ownerFullName: "Velocity",
+          ownerUsername: "velocity",
+          postsCount: 12,
+          profilePicUrlHD: "https://example.com/hd.jpg",
+        },
+        "velocity",
+      ),
     ).toEqual({
       description: "Bio",
       ig_name: "Velocity",
       post_count: 12,
       profile_picture_url: "https://example.com/hd.jpg",
     });
+  });
+
+  it("rejects profile metadata from a collaborative post owner", () => {
+    expect(
+      mapInstagramListingProfile(
+        {
+          biography: "Co-author bio",
+          ownerFullName: "Post Co-author",
+          ownerUsername: "coauthor",
+        },
+        "velocity",
+      ),
+    ).toEqual({});
   });
 });
 
@@ -177,20 +194,40 @@ describe("mapInstagramPostDetails", () => {
 describe("mapInstagramDetailsProfile", () => {
   it("uses the highest-resolution profile image and profile metadata", () => {
     expect(
-      mapInstagramDetailsProfile({
-        code: "ABC123",
-        taken_at: 1_786_968_000,
-        user: {
-          biography: "Profile bio",
-          full_name: "Velocity",
-          profile_pic_url: "https://example.com/profile.jpg",
-          profile_pic_url_hd: "https://example.com/profile-hd.jpg",
+      mapInstagramDetailsProfile(
+        {
+          code: "ABC123",
+          taken_at: 1_786_968_000,
+          user: {
+            biography: "Profile bio",
+            full_name: "Velocity",
+            profile_pic_url: "https://example.com/profile.jpg",
+            profile_pic_url_hd: "https://example.com/profile-hd.jpg",
+            username: "velocity",
+          },
         },
-      }),
+        "velocity",
+      ),
     ).toEqual({
       description: "Profile bio",
       ig_name: "Velocity",
       profile_picture_url: "https://example.com/profile-hd.jpg",
     });
+  });
+
+  it("rejects detail profile metadata from a collaborative post owner", () => {
+    expect(
+      mapInstagramDetailsProfile(
+        {
+          code: "ABC123",
+          taken_at: 1_786_968_000,
+          user: {
+            full_name: "Post Co-author",
+            username: "coauthor",
+          },
+        },
+        "velocity",
+      ),
+    ).toEqual({});
   });
 });

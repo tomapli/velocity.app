@@ -28,6 +28,7 @@ const UPSERT_BATCH_SIZE = 100;
 
 type AdminClient = SupabaseClient<Database>;
 type Group = Tables<"groups">;
+type IgProfile = Tables<"ig_profiles">;
 type ScheduledScrape = Tables<"scheduled_scrapes">;
 
 /**
@@ -40,6 +41,7 @@ export async function processSucceededApifyRun(
   datasetId?: string | null,
 ): Promise<{ importedPostCount?: number; batchHadOlderPost?: boolean }> {
   const group = await getGroup(admin, scrape.group_id);
+  const profile = await getProfile(admin, group.ig_profile_id);
   const actorRun = datasetId ? null : await getActorRun(token, scrape.apify_run_id!);
   const dataset = await getDatasetItems(
     token,
@@ -47,7 +49,7 @@ export async function processSucceededApifyRun(
   );
 
   if (scrape.scrape_type === "post_details") {
-    const imported = await importDetails(admin, group, scrape, dataset);
+    const imported = await importDetails(admin, profile, group, scrape, dataset);
     await finishScrape(admin, scrape.id);
 
     return {
@@ -56,7 +58,7 @@ export async function processSucceededApifyRun(
     };
   }
 
-  await importListing(admin, group, scrape, dataset);
+  await importListing(admin, profile, group, scrape, dataset);
   await finishScrape(admin, scrape.id);
 
   return {};
@@ -153,6 +155,7 @@ export async function markScrapeFailedAndAdvance(
 
 async function importListing(
   admin: AdminClient,
+  profile: IgProfile,
   group: Group,
   scrape: ScheduledScrape,
   dataset: unknown[],
@@ -213,13 +216,13 @@ async function importListing(
   }
 
   const profileUpdate = dataset
-    .map((item) => mapInstagramListingProfile(item))
+    .map((item) => mapInstagramListingProfile(item, profile.ig_username))
     .find((value) => Object.values(value).some((entry) => entry != null));
   if (profileUpdate) {
     const { error } = await admin
       .from("ig_profiles")
       .update(profileUpdate)
-      .eq("id", group.ig_profile_id);
+      .eq("id", profile.id);
     if (error) {
       throw error;
     }
@@ -228,6 +231,7 @@ async function importListing(
 
 async function importDetails(
   admin: AdminClient,
+  profile: IgProfile,
   group: Group,
   scrape: ScheduledScrape,
   dataset: unknown[],
@@ -294,13 +298,13 @@ async function importDetails(
   }
 
   const profileUpdate = dataset
-    .map((item) => mapInstagramDetailsProfile(item))
+    .map((item) => mapInstagramDetailsProfile(item, profile.ig_username))
     .find((value) => Object.values(value).some((entry) => entry != null));
   if (profileUpdate) {
     const { error } = await admin
       .from("ig_profiles")
       .update(profileUpdate)
-      .eq("id", group.ig_profile_id);
+      .eq("id", profile.id);
     if (error) {
       throw error;
     }
@@ -401,6 +405,23 @@ async function getGroup(admin: AdminClient, groupId: string): Promise<Group> {
     .from("groups")
     .select("*")
     .eq("id", groupId)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function getProfile(
+  admin: AdminClient,
+  profileId: string,
+): Promise<IgProfile> {
+  const { data, error } = await admin
+    .from("ig_profiles")
+    .select("*")
+    .eq("id", profileId)
     .single();
 
   if (error) {
