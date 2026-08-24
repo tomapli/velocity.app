@@ -20,6 +20,7 @@ import {
   type MetaAccountInsightMetric,
 } from "@/lib/meta/constants";
 import type { ResolvedMetaAccountAccess } from "@/lib/meta/connections";
+import { getMissingInsightMetrics } from "@/lib/meta/insights";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import type { Insertable, Tables } from "@/lib/supabase/tables";
 
@@ -160,22 +161,23 @@ async function getMediaInsights(
   const metrics = isReel(media)
     ? META_REEL_INSIGHT_METRICS
     : META_MEDIA_INSIGHT_METRICS;
+  let bulk: MetaInsight[] = [];
   try {
-    const bulk = await getMetaInsights({
+    bulk = await getMetaInsights({
       provider,
       objectId: media.id,
       token,
       metrics,
     });
-    return [...bulk, ...(await getMediaFollowerBreakdown(provider, token, media.id))];
   } catch (error) {
     if (!isExpectedUnavailableInsight(error)) {
       throw error;
     }
   }
 
+  const missingMetrics = getMissingInsightMetrics(metrics, bulk);
   const individually = await mapWithConcurrency(
-    metrics,
+    missingMetrics,
     META_FETCH_CONCURRENCY,
     async (metric) => {
       try {
@@ -194,6 +196,7 @@ async function getMediaInsights(
     },
   );
   return [
+    ...bulk,
     ...individually.flat(),
     ...(await getMediaFollowerBreakdown(provider, token, media.id)),
   ];
