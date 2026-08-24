@@ -10,6 +10,9 @@ const JOB = {
     ig_profile_id: "e1000000-0000-4000-8000-000000000001",
     requested_post_count: 12,
     since_when: null,
+    data_source: "public",
+    meta_connection_id: null,
+    meta_instagram_account_id: null,
   },
   profile: {
     created_at: "2026-08-20T10:00:00.000Z",
@@ -20,6 +23,7 @@ const JOB = {
     ig_username: "velocity",
     note: null,
     post_count: null,
+    follower_count: null,
     profile_picture_url: null,
     updated_at: "2026-08-20T10:00:00.000Z",
   },
@@ -42,6 +46,8 @@ describe("scheduleIgScrape", () => {
         igUsername: "velocity",
         requestedPostCount: 12,
         sinceWhen: null,
+        dataSource: "public",
+        metaInstagramAccountId: null,
       }),
     ).resolves.toEqual(JOB);
 
@@ -52,6 +58,8 @@ describe("scheduleIgScrape", () => {
         igUsername: "velocity",
         requestedPostCount: 12,
         sinceWhen: null,
+        dataSource: "public",
+        metaInstagramAccountId: null,
       }),
     });
   });
@@ -69,5 +77,23 @@ describe("scheduleIgScrape", () => {
     await expect(scheduleIgScrape({ igUsername: "velocity" })).rejects.toThrow(
       "Apify is not configured",
     );
+  });
+
+  it("sends the selected Meta account for a hybrid scrape", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ job: JOB }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await scheduleIgScrape({
+      igUsername: "velocity",
+      dataSource: "meta_hybrid",
+      metaInstagramAccountId: "e1000000-0000-4000-8000-000000000009",
+    });
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
+      dataSource: "meta_hybrid",
+      metaInstagramAccountId: "e1000000-0000-4000-8000-000000000009",
+    });
   });
 });

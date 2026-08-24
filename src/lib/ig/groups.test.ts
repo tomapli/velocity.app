@@ -16,6 +16,7 @@ const PROFILE: IgProfile = {
   ig_username: "velocity",
   note: null,
   post_count: null,
+  follower_count: null,
   profile_picture_url: null,
   updated_at: "2026-08-20T09:00:00.000Z",
 };
@@ -27,6 +28,9 @@ const GROUP: Group = {
   ig_profile_id: PROFILE.id,
   requested_post_count: 24,
   since_when: null,
+  data_source: "public",
+  meta_connection_id: null,
+  meta_instagram_account_id: null,
 };
 
 const SCRAPE: ScheduledScrape = {

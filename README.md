@@ -15,6 +15,25 @@
 
 # Links
 
+## Meta Instagram tester setup
+
+The workspace can reuse multiple Facebook Login for Business and Instagram
+Business Login connections. Configure the `META_*` values shown in
+`.env.example`, then register these exact OAuth redirect URLs in the Meta app:
+
+- `<META_OAUTH_REDIRECT_BASE_URL>/api/meta/oauth/facebook/callback`
+- `<META_OAUTH_REDIRECT_BASE_URL>/api/meta/oauth/instagram/callback`
+
+Facebook Login requests `instagram_basic`, `instagram_manage_insights`,
+`pages_read_engagement`, and `pages_show_list`. Instagram Login requests
+`instagram_business_basic` and `instagram_business_manage_insights`. The first
+release is intended for Meta app admins, developers, and testers; paid/boosted
+content permissions are intentionally excluded.
+
+OAuth tokens are AES-256-GCM encrypted before storage. Only server routes using
+the Supabase service role can read the connection tables; browser clients only
+receive redacted connection/account summaries.
+
 ## Publicly available
 
 - [Velocitapp](https://app.velocity.ooo)

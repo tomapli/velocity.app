@@ -37,24 +37,33 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          data_source: Database["public"]["Enums"]["ig_scrape_data_source"]
           id: string
           ig_profile_id: string
+          meta_connection_id: string | null
+          meta_instagram_account_id: string | null
           requested_post_count: number | null
           since_when: string | null
         }
         Insert: {
           created_at?: string
           created_by: string
+          data_source?: Database["public"]["Enums"]["ig_scrape_data_source"]
           id?: string
           ig_profile_id: string
+          meta_connection_id?: string | null
+          meta_instagram_account_id?: string | null
           requested_post_count?: number | null
           since_when?: string | null
         }
         Update: {
           created_at?: string
           created_by?: string
+          data_source?: Database["public"]["Enums"]["ig_scrape_data_source"]
           id?: string
           ig_profile_id?: string
+          meta_connection_id?: string | null
+          meta_instagram_account_id?: string | null
           requested_post_count?: number | null
           since_when?: string | null
         }
@@ -66,21 +75,89 @@ export type Database = {
             referencedRelation: "ig_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "groups_meta_connection_id_fkey"
+            columns: ["meta_connection_id"]
+            isOneToOne: false
+            referencedRelation: "meta_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "groups_meta_instagram_account_id_fkey"
+            columns: ["meta_instagram_account_id"]
+            isOneToOne: false
+            referencedRelation: "meta_instagram_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ig_account_insights: {
+        Row: {
+          captured_at: string
+          group_id: string
+          id: string
+          ig_profile_id: string
+          metrics: Json
+          period_end: string
+          period_start: string
+        }
+        Insert: {
+          captured_at?: string
+          group_id: string
+          id?: string
+          ig_profile_id: string
+          metrics: Json
+          period_end: string
+          period_start: string
+        }
+        Update: {
+          captured_at?: string
+          group_id?: string
+          id?: string
+          ig_profile_id?: string
+          metrics?: Json
+          period_end?: string
+          period_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ig_account_insights_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: true
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ig_account_insights_profile_id_fkey"
+            columns: ["ig_profile_id"]
+            isOneToOne: false
+            referencedRelation: "ig_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       ig_posts: {
         Row: {
+          average_watch_time_ms: number | null
           carousel_image_urls: string[] | null
           comment_count: number | null
           created_at: string
           description: string | null
           details_scrape_id: string | null
           first_frame_url: string | null
+          follower_non_follower_ratio: number | null
+          follower_view_count: number | null
+          follows_count: number | null
+          hold_rate: number | null
+          hook_rate: number | null
           id: string
           ig_profile_id: string
           like_count: number | null
           media_type: Database["public"]["Enums"]["ig_post_media_type"] | null
+          meta_media_id: string | null
+          non_follower_view_count: number | null
           post_url: string
+          reach_count: number | null
           save_count: number | null
           share_count: number | null
           source_scrape_id: string
@@ -91,17 +168,26 @@ export type Database = {
           view_count: number | null
         }
         Insert: {
+          average_watch_time_ms?: number | null
           carousel_image_urls?: string[] | null
           comment_count?: number | null
           created_at?: string
           description?: string | null
           details_scrape_id?: string | null
           first_frame_url?: string | null
+          follower_non_follower_ratio?: number | null
+          follower_view_count?: number | null
+          follows_count?: number | null
+          hold_rate?: number | null
+          hook_rate?: number | null
           id?: string
           ig_profile_id: string
           like_count?: number | null
           media_type?: Database["public"]["Enums"]["ig_post_media_type"] | null
+          meta_media_id?: string | null
+          non_follower_view_count?: number | null
           post_url: string
+          reach_count?: number | null
           save_count?: number | null
           share_count?: number | null
           source_scrape_id: string
@@ -112,17 +198,26 @@ export type Database = {
           view_count?: number | null
         }
         Update: {
+          average_watch_time_ms?: number | null
           carousel_image_urls?: string[] | null
           comment_count?: number | null
           created_at?: string
           description?: string | null
           details_scrape_id?: string | null
           first_frame_url?: string | null
+          follower_non_follower_ratio?: number | null
+          follower_view_count?: number | null
+          follows_count?: number | null
+          hold_rate?: number | null
+          hook_rate?: number | null
           id?: string
           ig_profile_id?: string
           like_count?: number | null
           media_type?: Database["public"]["Enums"]["ig_post_media_type"] | null
+          meta_media_id?: string | null
+          non_follower_view_count?: number | null
           post_url?: string
+          reach_count?: number | null
           save_count?: number | null
           share_count?: number | null
           source_scrape_id?: string
@@ -161,6 +256,7 @@ export type Database = {
           created_at: string
           created_by: string
           description: string | null
+          follower_count: number | null
           id: string
           ig_name: string | null
           ig_username: string
@@ -173,6 +269,7 @@ export type Database = {
           created_at?: string
           created_by: string
           description?: string | null
+          follower_count?: number | null
           id?: string
           ig_name?: string | null
           ig_username: string
@@ -185,6 +282,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           description?: string | null
+          follower_count?: number | null
           id?: string
           ig_name?: string | null
           ig_username?: string
@@ -194,6 +292,98 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      meta_connections: {
+        Row: {
+          access_token_ciphertext: string
+          account_picture_url: string | null
+          created_at: string
+          created_by: string | null
+          display_name: string
+          external_user_id: string
+          id: string
+          last_used_at: string | null
+          last_validated_at: string | null
+          provider: Database["public"]["Enums"]["meta_oauth_provider"]
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token_ciphertext: string
+          account_picture_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          display_name: string
+          external_user_id: string
+          id?: string
+          last_used_at?: string | null
+          last_validated_at?: string | null
+          provider: Database["public"]["Enums"]["meta_oauth_provider"]
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token_ciphertext?: string
+          account_picture_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          display_name?: string
+          external_user_id?: string
+          id?: string
+          last_used_at?: string | null
+          last_validated_at?: string | null
+          provider?: Database["public"]["Enums"]["meta_oauth_provider"]
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meta_instagram_accounts: {
+        Row: {
+          access_token_ciphertext: string | null
+          connection_id: string
+          discovered_at: string
+          id: string
+          ig_user_id: string
+          name: string | null
+          page_id: string | null
+          profile_picture_url: string | null
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          access_token_ciphertext?: string | null
+          connection_id: string
+          discovered_at?: string
+          id?: string
+          ig_user_id: string
+          name?: string | null
+          page_id?: string | null
+          profile_picture_url?: string | null
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          access_token_ciphertext?: string | null
+          connection_id?: string
+          discovered_at?: string
+          id?: string
+          ig_user_id?: string
+          name?: string | null
+          page_id?: string | null
+          profile_picture_url?: string | null
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_instagram_accounts_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "meta_connections"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       scheduled_scrapes: {
         Row: {
@@ -250,6 +440,8 @@ export type Database = {
     }
     Enums: {
       ig_post_media_type: "carousel" | "short" | "static"
+      ig_scrape_data_source: "public" | "meta_hybrid"
+      meta_oauth_provider: "facebook" | "instagram"
       scheduled_scrape_type: "posts" | "reels" | "post_details"
     }
     CompositeTypes: {
@@ -379,6 +571,8 @@ export const Constants = {
   public: {
     Enums: {
       ig_post_media_type: ["carousel", "short", "static"],
+      ig_scrape_data_source: ["public", "meta_hybrid"],
+      meta_oauth_provider: ["facebook", "instagram"],
       scheduled_scrape_type: ["posts", "reels", "post_details"],
     },
   },

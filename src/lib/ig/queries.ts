@@ -10,6 +10,7 @@ export type IgProfile = Tables<"ig_profiles">;
 export type Group = Tables<"groups">;
 export type ScheduledScrape = Tables<"scheduled_scrapes">;
 export type IgPost = Tables<"ig_posts">;
+export type IgAccountInsights = Tables<"ig_account_insights">;
 
 export interface ScheduleIgScrapeParams {
   igUsername: string;
@@ -127,7 +128,6 @@ export async function listIgPostsForProfile(
     .from("ig_posts")
     .select("*")
     .eq("ig_profile_id", profileId)
-    .not("details_scrape_id", "is", null)
     .order("uploaded_at", { ascending: false });
 
   if (error) {
@@ -135,6 +135,22 @@ export async function listIgPostsForProfile(
   }
 
   return deduplicateIgPostsByShortcode(data ?? []);
+}
+
+/** Loads the newest private account-insight snapshot available for a profile. */
+export async function getIgAccountInsightsForGroup(
+  supabase: SupabaseClient<Database>,
+  groupId: string,
+): Promise<IgAccountInsights | null> {
+  const { data, error } = await supabase
+    .from("ig_account_insights")
+    .select("*")
+    .eq("group_id", groupId)
+    .maybeSingle();
+  if (error) {
+    return throwQueryError(error);
+  }
+  return data;
 }
 
 /**

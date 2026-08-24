@@ -4,7 +4,11 @@ import { IgProfilePageClient } from "@/components/ig/ig-profile-page-client";
 import { PageShell } from "@/components/ui/page-shell";
 import { IG_USERNAME_PATTERN } from "@/lib/ig/constants";
 import { syncUnsettledApifyRunsForGroup } from "@/lib/ig/process-apify-run";
-import { getLatestIgScrapeJobForUsername, listIgPostsForProfile } from "@/lib/ig/queries";
+import {
+  getIgAccountInsightsForGroup,
+  getLatestIgScrapeJobForUsername,
+  listIgPostsForProfile,
+} from "@/lib/ig/queries";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -38,6 +42,9 @@ export default async function IgProfilePage({ params }: IgProfilePageProps) {
   const initialPosts = latestJob
     ? await listIgPostsForProfile(supabase, latestJob.profile.id)
     : [];
+  const initialAccountInsights = latestJob
+    ? await getIgAccountInsightsForGroup(supabase, latestJob.group.id)
+    : null;
 
   return (
     <PageShell size="full">
@@ -45,6 +52,7 @@ export default async function IgProfilePage({ params }: IgProfilePageProps) {
         username={username}
         initialJob={latestJob}
         initialPosts={initialPosts}
+        initialAccountInsights={initialAccountInsights}
       />
     </PageShell>
   );

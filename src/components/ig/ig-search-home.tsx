@@ -1,10 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Settings } from "lucide-react";
 import { toast } from "sonner";
 
 import { CopilotSearchBar } from "@/components/ig/copilot-search-bar";
+import { Button } from "@/components/ui/button";
 import {
   ScrapeParamsDialog,
   type ScrapeParamsConfirmPayload,
@@ -139,12 +142,6 @@ export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
         isUrlInput: option.isUrlInput,
       };
 
-      if (option.isUrlInput) {
-        setActiveDialog(pending);
-        setQuery("");
-        return;
-      }
-
       enqueuePendingIgScrape(pending);
       window.open(instagramProfileUrl(option.username), "_blank", "noopener,noreferrer");
       setQuery("");
@@ -164,6 +161,8 @@ export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
         igUsername: activeDialog.username,
         requestedPostCount: payload.requestedPostCount,
         sinceWhen: payload.sinceWhen,
+        dataSource: payload.dataSource,
+        metaInstagramAccountId: payload.metaInstagramAccountId,
       });
 
       upsertProfile(job.profile);
@@ -207,9 +206,14 @@ export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
           <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
             Global history
           </h2>
-          <span className="text-sm text-muted-foreground">
-            {jobs.length} {jobs.length === 1 ? "search" : "searches"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {jobs.length} {jobs.length === 1 ? "search" : "searches"}
+            </span>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/settings/meta"><Settings />Meta connections</Link>
+            </Button>
+          </div>
         </div>
         <ScrapeHistory jobs={jobs} />
       </section>

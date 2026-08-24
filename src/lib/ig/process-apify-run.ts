@@ -21,15 +21,19 @@ import {
 } from "@/lib/ig/start-runs";
 import type { Database } from "@/lib/supabase/database.types";
 import type { Tables } from "@/lib/supabase/tables";
+import type { Updatable } from "@/lib/supabase/tables";
 
 const APIFY_SUCCESS_STATUS = "SUCCEEDED";
 const APIFY_FAILED_STATUSES = new Set(["ABORTED", "FAILED", "TIMED-OUT"]);
 const UPSERT_BATCH_SIZE = 100;
+const PERCENT_MAX = 100;
+const MILLISECONDS_PER_SECOND = 1_000;
 
 type AdminClient = SupabaseClient<Database>;
 type Group = Tables<"groups">;
 type IgProfile = Tables<"ig_profiles">;
 type ScheduledScrape = Tables<"scheduled_scrapes">;
+type IgPostRow = Tables<"ig_posts">;
 
 /**
  * Imports a succeeded Apify run for a scheduled scrape row.
@@ -179,15 +183,44 @@ async function importListing(
 
   const { data: existingPosts, error: existingPostsError } = await admin
     .from("ig_posts")
-    .select("id, post_url")
+    .select("*")
     .eq("ig_profile_id", group.ig_profile_id);
   if (existingPostsError) {
     throw existingPostsError;
   }
 
-  for (let index = 0; index < uniquePending.length; index += UPSERT_BATCH_SIZE) {
+  const existingByUrl = new Map(
+    (existingPosts ?? []).map((post) => [getCanonicalInstagramPostUrl(post.post_url), post]),
+  );
+  const mergedPending = uniquePending.map((post) => {
+    const existing = existingByUrl.get(post.post_url);
+    if (group.data_source !== "meta_hybrid") {
+      return {
+        ...post,
+        meta_media_id: null,
+        follows_count: null,
+        follower_view_count: null,
+        non_follower_view_count: null,
+        follower_non_follower_ratio: null,
+        reach_count: null,
+        hook_rate: null,
+        average_watch_time_ms: null,
+        hold_rate: null,
+      };
+    }
+    if (!existing?.meta_media_id) {
+      return post;
+    }
+    return {
+      ...post,
+      uploaded_at: existing.uploaded_at ?? post.uploaded_at,
+      thumbnail_url: existing.thumbnail_url ?? post.thumbnail_url,
+    };
+  });
+
+  for (let index = 0; index < mergedPending.length; index += UPSERT_BATCH_SIZE) {
     const { error } = await admin.from("ig_posts").upsert(
-      uniquePending.slice(index, index + UPSERT_BATCH_SIZE),
+      mergedPending.slice(index, index + UPSERT_BATCH_SIZE),
       {
         onConflict: "ig_profile_id,post_url",
       },
@@ -221,7 +254,11 @@ async function importListing(
   if (profileUpdate) {
     const { error } = await admin
       .from("ig_profiles")
-      .update(profileUpdate)
+      .update(
+        group.data_source === "meta_hybrid"
+          ? mergeProfileUpdate(profile, profileUpdate)
+          : profileUpdate,
+      )
       .eq("id", profile.id);
     if (error) {
       throw error;
@@ -238,14 +275,14 @@ async function importDetails(
 ): Promise<{ updatedCount: number; batchHadOlderPost: boolean }> {
   const { data: existing, error: existingError } = await admin
     .from("ig_posts")
-    .select("id, post_url")
+    .select("*")
     .eq("ig_profile_id", group.ig_profile_id);
 
   if (existingError) {
     throw existingError;
   }
 
-  const byShortcode = new Map<string, string[]>();
+  const byShortcode = new Map<string, IgPostRow[]>();
 
   for (const post of existing ?? []) {
     const shortcode = getInstagramShortcode(post.post_url);
@@ -254,7 +291,7 @@ async function importDetails(
     }
 
     const ids = byShortcode.get(shortcode) ?? [];
-    ids.push(post.id);
+    ids.push(post);
     byShortcode.set(shortcode, ids);
   }
 
@@ -281,14 +318,18 @@ async function importDetails(
       continue;
     }
 
-    for (const postId of postIds) {
+    for (const post of postIds) {
+      const mergedUpdate =
+        group.data_source === "meta_hybrid" && post.meta_media_id
+          ? mergeApifyDetails(post, detailsUpdate)
+          : detailsUpdate;
       const { error } = await admin
         .from("ig_posts")
         .update({
-          ...detailsUpdate,
+          ...mergedUpdate,
           details_scrape_id: scrape.id,
         })
-        .eq("id", postId);
+        .eq("id", post.id);
       if (error) {
         throw error;
       }
@@ -303,7 +344,11 @@ async function importDetails(
   if (profileUpdate) {
     const { error } = await admin
       .from("ig_profiles")
-      .update(profileUpdate)
+      .update(
+        group.data_source === "meta_hybrid"
+          ? mergeProfileUpdate(profile, profileUpdate)
+          : profileUpdate,
+      )
       .eq("id", profile.id);
     if (error) {
       throw error;
@@ -429,6 +474,48 @@ async function getProfile(
   }
 
   return data;
+}
+
+function mergeApifyDetails(
+  existing: IgPostRow,
+  update: Updatable<"ig_posts">,
+): Updatable<"ig_posts"> {
+  const videoLengthSecs = existing.video_length_secs ?? update.video_length_secs ?? null;
+  const averageWatchTimeMs = existing.average_watch_time_ms;
+  return {
+    uploaded_at: existing.uploaded_at ?? update.uploaded_at,
+    thumbnail_url: existing.thumbnail_url ?? update.thumbnail_url,
+    first_frame_url: existing.first_frame_url ?? update.first_frame_url,
+    video_embed_url: existing.video_embed_url ?? update.video_embed_url,
+    media_type: existing.media_type ?? update.media_type,
+    carousel_image_urls: existing.carousel_image_urls ?? update.carousel_image_urls,
+    video_length_secs: videoLengthSecs,
+    view_count: existing.view_count ?? update.view_count,
+    save_count: existing.save_count ?? update.save_count,
+    share_count: existing.share_count ?? update.share_count,
+    comment_count: existing.comment_count ?? update.comment_count,
+    like_count: existing.like_count ?? update.like_count,
+    description: existing.description ?? update.description,
+    hold_rate:
+      existing.hold_rate ??
+      (averageWatchTimeMs != null && videoLengthSecs != null && videoLengthSecs > 0
+        ? (averageWatchTimeMs / (videoLengthSecs * MILLISECONDS_PER_SECOND)) *
+          PERCENT_MAX
+        : null),
+  };
+}
+
+function mergeProfileUpdate(
+  existing: IgProfile,
+  update: Updatable<"ig_profiles">,
+): Updatable<"ig_profiles"> {
+  return {
+    profile_picture_url:
+      existing.profile_picture_url ?? update.profile_picture_url,
+    ig_name: existing.ig_name ?? update.ig_name,
+    description: existing.description ?? update.description,
+    post_count: existing.post_count ?? update.post_count,
+  };
 }
 
 async function finishScrape(admin: AdminClient, scrapeId: string): Promise<void> {

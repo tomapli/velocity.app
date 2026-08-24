@@ -8,6 +8,7 @@ import {
   text,
   timestamp,
   integer,
+  numeric,
   index,
   unique,
   check,
@@ -46,6 +47,19 @@ export const igPosts = pgTable(
     shareCount: integer("share_count"),
     commentCount: integer("comment_count"),
     likeCount: integer("like_count"),
+    metaMediaId: text("meta_media_id"),
+    followsCount: integer("follows_count"),
+    followerViewCount: integer("follower_view_count"),
+    nonFollowerViewCount: integer("non_follower_view_count"),
+    followerNonFollowerRatio: numeric("follower_non_follower_ratio", {
+      precision: 12,
+      scale: 4,
+      mode: "number",
+    }),
+    reachCount: integer("reach_count"),
+    hookRate: numeric("hook_rate", { precision: 7, scale: 3, mode: "number" }),
+    averageWatchTimeMs: integer("average_watch_time_ms"),
+    holdRate: numeric("hold_rate", { precision: 7, scale: 3, mode: "number" }),
     description: text("description"),
     createdAt: timestamp("created_at", {
       withTimezone: true,
@@ -59,6 +73,7 @@ export const igPosts = pgTable(
     index("ig_posts_source_scrape_id_idx").on(table.sourceScrapeId),
     index("ig_posts_details_scrape_id_idx").on(table.detailsScrapeId),
     index("ig_posts_uploaded_at_idx").on(table.uploadedAt.desc()),
+    unique("ig_posts_meta_media_id_key").on(table.metaMediaId),
     unique("ig_posts_ig_profile_id_post_url_key").on(
       table.igProfileId,
       table.postUrl,
@@ -105,6 +120,32 @@ export const igPosts = pgTable(
     check(
       "ig_posts_like_count_non_negative",
       sql`like_count IS NULL OR like_count >= 0`,
+    ),
+    check(
+      "ig_posts_follows_count_non_negative",
+      sql`follows_count IS NULL OR follows_count >= 0`,
+    ),
+    check(
+      "ig_posts_follower_view_count_non_negative",
+      sql`follower_view_count IS NULL OR follower_view_count >= 0`,
+    ),
+    check(
+      "ig_posts_non_follower_view_count_non_negative",
+      sql`non_follower_view_count IS NULL OR non_follower_view_count >= 0`,
+    ),
+    check(
+      "ig_posts_reach_count_non_negative",
+      sql`reach_count IS NULL OR reach_count >= 0`,
+    ),
+    check(
+      "ig_posts_average_watch_time_ms_non_negative",
+      sql`average_watch_time_ms IS NULL OR average_watch_time_ms >= 0`,
+    ),
+    check(
+      "ig_posts_rates_non_negative",
+      sql`(follower_non_follower_ratio IS NULL OR follower_non_follower_ratio >= 0)
+        AND (hook_rate IS NULL OR hook_rate >= 0)
+        AND (hold_rate IS NULL OR hold_rate >= 0)`,
     ),
     pgPolicy("Authenticated users can view ig posts", {
       as: "permissive",

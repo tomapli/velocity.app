@@ -1,5 +1,6 @@
 import type { Database } from "@/lib/supabase/database.types";
-import type { IgPost } from "@/lib/ig/queries";
+import { summarizeAccountInsights } from "@/lib/ig/account-insights";
+import type { IgAccountInsights, IgPost } from "@/lib/ig/queries";
 
 export type IgMediaType = Database["public"]["Enums"]["ig_post_media_type"];
 export type MetricTone = "pass" | "near" | "miss" | "neutral";
@@ -11,6 +12,14 @@ export type IgPostSortKey =
   | "comment_count"
   | "save_count"
   | "share_count"
+  | "follows_count"
+  | "follower_view_count"
+  | "non_follower_view_count"
+  | "follower_non_follower_ratio"
+  | "reach_count"
+  | "hook_rate"
+  | "average_watch_time_ms"
+  | "hold_rate"
   | "description_length"
   | "er"
   | "weighted_er"
@@ -68,6 +77,14 @@ export const IG_POST_SORT_OPTIONS: { key: IgPostSortKey; label: string }[] = [
   { key: "comment_count", label: "Comments" },
   { key: "save_count", label: "Saves" },
   { key: "share_count", label: "Shares" },
+  { key: "follows_count", label: "Followers from post" },
+  { key: "follower_view_count", label: "Follower views" },
+  { key: "non_follower_view_count", label: "Non-follower views" },
+  { key: "follower_non_follower_ratio", label: "Follower ratio" },
+  { key: "reach_count", label: "Reach" },
+  { key: "hook_rate", label: "Hook rate" },
+  { key: "average_watch_time_ms", label: "Average watch time" },
+  { key: "hold_rate", label: "Hold rate" },
   { key: "er", label: "ER" },
   { key: "weighted_er", label: "Weighted ER" },
   { key: "save_rate", label: "Save rate" },
@@ -136,6 +153,22 @@ export function getIgPostSortValue(post: IgPost, key: IgPostSortKey): number | n
       return post.save_count;
     case "share_count":
       return post.share_count;
+    case "follows_count":
+      return post.follows_count;
+    case "follower_view_count":
+      return post.follower_view_count;
+    case "non_follower_view_count":
+      return post.non_follower_view_count;
+    case "follower_non_follower_ratio":
+      return post.follower_non_follower_ratio;
+    case "reach_count":
+      return post.reach_count;
+    case "hook_rate":
+      return post.hook_rate;
+    case "average_watch_time_ms":
+      return post.average_watch_time_ms;
+    case "hold_rate":
+      return post.hold_rate;
     case "description_length":
       return metrics.descriptionLength;
     case "er":
@@ -225,6 +258,14 @@ export function formatVideoLength(seconds: number): string {
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
+export function formatMilliseconds(milliseconds: number | null): string | null {
+  return milliseconds == null ? null : `${(milliseconds / 1_000).toFixed(1)}s`;
+}
+
+export function formatRatio(value: number | null): string | null {
+  return value == null ? null : `${PERCENT_FORMATTER.format(value)}×`;
+}
+
 export function metricToneClassName(tone: MetricTone): string {
   switch (tone) {
     case "pass":
@@ -241,8 +282,15 @@ export function metricToneClassName(tone: MetricTone): string {
 /**
  * Builds a CSV document from visible post fields. Omitted values stay empty cells.
  */
-export function postsToCsv(posts: IgPost[]): string {
+export function postsToCsv(
+  posts: IgPost[],
+  options: {
+    dataSource?: Database["public"]["Enums"]["ig_scrape_data_source"];
+    accountInsights?: IgAccountInsights | null;
+  } = {},
+): string {
   const headers = [
+    "Source",
     "Date of upload",
     "Thumbnail",
     "URL",
@@ -255,6 +303,14 @@ export function postsToCsv(posts: IgPost[]): string {
     "Shares",
     "Comments",
     "Likes",
+    "Followers from post",
+    "Follower views",
+    "Non-follower views",
+    "Follower/non-follower ratio",
+    "Reach",
+    "Hook rate %",
+    "Average watch time (ms)",
+    "Hold rate %",
     "Description",
     "Description length",
     "ER %",
@@ -268,6 +324,7 @@ export function postsToCsv(posts: IgPost[]): string {
   const rows = posts.map((post) => {
     const metrics = getIgPostMetrics(post);
     return [
+      options.dataSource === "meta_hybrid" ? "Meta + public data" : "Public data",
       post.uploaded_at ?? "",
       post.thumbnail_url ?? "",
       post.post_url,
@@ -280,6 +337,14 @@ export function postsToCsv(posts: IgPost[]): string {
       post.share_count ?? "",
       post.comment_count ?? "",
       post.like_count ?? "",
+      post.follows_count ?? "",
+      post.follower_view_count ?? "",
+      post.non_follower_view_count ?? "",
+      post.follower_non_follower_ratio ?? "",
+      post.reach_count ?? "",
+      post.hook_rate ?? "",
+      post.average_watch_time_ms ?? "",
+      post.hold_rate ?? "",
       post.description ?? "",
       metrics.descriptionLength ?? "",
       metrics.unweightedEr?.value ?? "",
@@ -291,7 +356,18 @@ export function postsToCsv(posts: IgPost[]): string {
     ].map(csvCell);
   });
 
-  return [headers.map(csvCell).join(","), ...rows.map((row) => row.join(","))].join("\n");
+  const sections = [headers.map(csvCell).join(","), ...rows.map((row) => row.join(","))];
+  if (options.accountInsights) {
+    sections.push(
+      "",
+      "Account insights",
+      ["Metric", "Value"].map(csvCell).join(","),
+      ...summarizeAccountInsights(options.accountInsights.metrics).map((summary) =>
+        [summary.label, summary.displayValue].map(csvCell).join(","),
+      ),
+    );
+  }
+  return sections.join("\n");
 }
 
 function scoreUnweightedEr(post: IgPost, views: number): ScoredValue | null {

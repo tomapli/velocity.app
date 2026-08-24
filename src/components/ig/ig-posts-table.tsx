@@ -23,6 +23,9 @@ import {
 } from "@/components/ui/table";
 import {
   formatCount,
+  formatMilliseconds,
+  formatPercent,
+  formatRatio,
   formatUploadedAt,
   getIgPostMetrics,
   MEDIA_TYPE_LABELS,
@@ -138,6 +141,62 @@ export function IgPostsTable({
             <SortableTableHead
               label="Shares"
               columnKey="share_count"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Follows"
+              columnKey="follows_count"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Follower views"
+              columnKey="follower_view_count"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Non-follower views"
+              columnKey="non_follower_view_count"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Follower ratio"
+              columnKey="follower_non_follower_ratio"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Reach"
+              columnKey="reach_count"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Hook rate"
+              columnKey="hook_rate"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Avg watch"
+              columnKey="average_watch_time_ms"
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+            <SortableTableHead
+              label="Hold rate"
+              columnKey="hold_rate"
               sortKey={sortKey}
               sortDirection={sortDirection}
               onSort={handleSort}
@@ -314,6 +373,30 @@ function IgPostRow({ username, post }: { username: string; post: IgPost }) {
       </TableCell>
       <TableCell className="pointer-events-none">
         <IgPlainMetric value={formatCount(post.share_count)} />
+      </TableCell>
+      <TableCell className="pointer-events-none">
+        <IgPlainMetric value={formatCount(post.follows_count)} />
+      </TableCell>
+      <TableCell className="pointer-events-none">
+        <IgPlainMetric value={formatCount(post.follower_view_count)} />
+      </TableCell>
+      <TableCell className="pointer-events-none">
+        <IgPlainMetric value={formatCount(post.non_follower_view_count)} />
+      </TableCell>
+      <TableCell className="pointer-events-none">
+        <IgPlainMetric value={formatRatio(post.follower_non_follower_ratio)} />
+      </TableCell>
+      <TableCell className="pointer-events-none">
+        <IgPlainMetric value={formatCount(post.reach_count)} />
+      </TableCell>
+      <TableCell className="pointer-events-none">
+        <IgPlainMetric value={post.hook_rate == null ? null : formatPercent(post.hook_rate)} />
+      </TableCell>
+      <TableCell className="pointer-events-none">
+        <IgPlainMetric value={formatMilliseconds(post.average_watch_time_ms)} />
+      </TableCell>
+      <TableCell className="pointer-events-none">
+        <IgPlainMetric value={post.hold_rate == null ? null : formatPercent(post.hold_rate)} />
       </TableCell>
       <TableCell className="pointer-events-none">
         <IgMetricBadge value={metrics.unweightedEr} />

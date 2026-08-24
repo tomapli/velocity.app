@@ -32,6 +32,7 @@ export const igProfiles = pgTable(
     description: text("description"),
     note: text("note"),
     postCount: integer("post_count"),
+    followerCount: integer("follower_count"),
     updatedAt: timestamp("updated_at", {
       withTimezone: true,
       mode: "string",
@@ -55,6 +56,10 @@ export const igProfiles = pgTable(
     check(
       "ig_profiles_post_count_non_negative",
       sql`post_count IS NULL OR post_count >= 0`,
+    ),
+    check(
+      "ig_profiles_follower_count_non_negative",
+      sql`follower_count IS NULL OR follower_count >= 0`,
     ),
     pgPolicy("Authenticated users can view ig profiles", {
       as: "permissive",

@@ -75,6 +75,11 @@ export function ScrapeHistory({ jobs }: ScrapeHistoryProps) {
                 @{job.profile.ig_username}
               </Link>
               <StatusBadge job={job} />
+              <Badge variant="outline">
+                {job.group.data_source === "meta_hybrid"
+                  ? "Meta + public data"
+                  : "Public data"}
+              </Badge>
             </div>
             <p className="text-sm text-muted-foreground">{formatJobParams(job)}</p>
             {job.profile.ig_name ? (

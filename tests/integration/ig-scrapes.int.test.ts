@@ -204,6 +204,30 @@ describe("scheduled_scrapes", () => {
   });
 });
 
+describe("Meta workspace data", () => {
+  it("keeps encrypted Meta credentials unavailable to authenticated clients", async () => {
+    await withRollback(async (client) => {
+      const auth = await insertAuthUser(client);
+      await asClaims(client, { sub: auth.id });
+
+      await expect(
+        client.query("select access_token_ciphertext from public.meta_connections"),
+      ).rejects.toThrow(/permission denied/);
+    });
+  });
+
+  it("shares collected account insights with authenticated users", async () => {
+    await withRollback(async (client) => {
+      const auth = await insertAuthUser(client);
+      await asClaims(client, { sub: auth.id });
+
+      await expect(
+        client.query("select count(*)::int as count from public.ig_account_insights"),
+      ).resolves.toMatchObject({ rows: [{ count: 0 }] });
+    });
+  });
+});
+
 describe("authorized_users picture sync", () => {
   it("stores picture_url when a matching auth user is created", async () => {
     await withRollback(async (client) => {

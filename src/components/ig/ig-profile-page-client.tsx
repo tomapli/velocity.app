@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Instagram, LoaderCircle } from "lucide-react";
 
 import { IgPostsTable } from "@/components/ig/ig-posts-table";
+import { IgAccountInsightsPanel } from "@/components/ig/ig-account-insights";
 import { IgPostsToolbar } from "@/components/ig/ig-posts-toolbar";
 import { ScrapeParamsDialog } from "@/components/ig/scrape-params-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -42,8 +43,17 @@ import {
   type IgScrapeJob,
   type IgScrapeStatus,
 } from "@/lib/ig/groups";
-import type { Group, IgPost, IgProfile, ScheduledScrape } from "@/lib/ig/queries";
-import { listIgPostsForProfile } from "@/lib/ig/queries";
+import type {
+  Group,
+  IgAccountInsights,
+  IgPost,
+  IgProfile,
+  ScheduledScrape,
+} from "@/lib/ig/queries";
+import {
+  getIgAccountInsightsForGroup,
+  listIgPostsForProfile,
+} from "@/lib/ig/queries";
 import { scheduleIgScrape } from "@/lib/ig/schedule-scrape";
 import { useIgScrapesRealtime } from "@/lib/ig/use-ig-scrapes-realtime";
 import { createClient } from "@/lib/supabase/client";
@@ -53,6 +63,7 @@ interface IgProfilePageClientProps {
   username: string;
   initialJob: IgScrapeJob | null;
   initialPosts: IgPost[];
+  initialAccountInsights: IgAccountInsights | null;
 }
 
 type PromptMode = "generate" | "regenerate" | null;
@@ -71,11 +82,15 @@ export function IgProfilePageClient({
   username,
   initialJob,
   initialPosts,
+  initialAccountInsights,
 }: IgProfilePageClientProps) {
   const [profile, setProfile] = useState<IgProfile | null>(initialJob?.profile ?? null);
   const [groups, setGroups] = useState<Group[]>(initialJob ? [initialJob.group] : []);
   const [scrapes, setScrapes] = useState<ScheduledScrape[]>(initialJob?.scrapes ?? []);
   const [posts, setPosts] = useState<IgPost[]>(initialPosts);
+  const [accountInsights, setAccountInsights] = useState<IgAccountInsights | null>(
+    initialAccountInsights,
+  );
   const [promptMode, setPromptMode] = useState<PromptMode>(() =>
     resolveInitialPrompt(initialJob),
   );
@@ -144,6 +159,7 @@ export function IgProfilePageClient({
   useEffect(() => {
     if (!profile) {
       setPosts([]);
+      setAccountInsights(null);
       return;
     }
 
@@ -152,9 +168,13 @@ export function IgProfilePageClient({
 
     const load = async () => {
       try {
-        const nextPosts = await listIgPostsForProfile(supabase, profile.id);
+        const [nextPosts, nextAccountInsights] = await Promise.all([
+          listIgPostsForProfile(supabase, profile.id),
+          job ? getIgAccountInsightsForGroup(supabase, job.group.id) : Promise.resolve(null),
+        ]);
         if (!cancelled) {
           setPosts(nextPosts);
+          setAccountInsights(nextAccountInsights);
         }
       } catch (error) {
         if (!cancelled) {
@@ -184,6 +204,8 @@ export function IgProfilePageClient({
   const handleSchedule = async (payload: {
     requestedPostCount: number | null;
     sinceWhen: string | null;
+    dataSource: "public" | "meta_hybrid";
+    metaInstagramAccountId: string | null;
   }) => {
     setIsScheduling(true);
     try {
@@ -191,12 +213,15 @@ export function IgProfilePageClient({
         igUsername: username,
         requestedPostCount: payload.requestedPostCount,
         sinceWhen: payload.sinceWhen,
+        dataSource: payload.dataSource,
+        metaInstagramAccountId: payload.metaInstagramAccountId,
       });
 
       setProfile(created.profile);
       setGroups([created.group]);
       setScrapes(created.scrapes);
       setPosts([]);
+      setAccountInsights(null);
       setParamsDialogOpen(false);
       toast.success(`Scheduled @${username}`);
     } catch (error) {
@@ -207,7 +232,10 @@ export function IgProfilePageClient({
   };
 
   const handleExport = () => {
-    const csv = postsToCsv(visiblePosts);
+    const csv = postsToCsv(visiblePosts, {
+      dataSource: job?.group.data_source,
+      accountInsights,
+    });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -226,10 +254,19 @@ export function IgProfilePageClient({
         description={profile?.ig_name ?? profile?.description ?? "Instagram profile results"}
         count={{ value: visiblePosts.length, label: visiblePosts.length === 1 ? "post" : "posts" }}
         action={
-          <Badge variant="outline" className={cn(STATUS_BADGE_CLASSES[status])}>
-            {isBusy ? <LoaderCircle className="size-3 animate-spin" /> : null}
-            {STATUS_LABELS[status]}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {job ? (
+              <Badge variant="outline">
+                {job.group.data_source === "meta_hybrid"
+                  ? "Meta + public data"
+                  : "Public data"}
+              </Badge>
+            ) : null}
+            <Badge variant="outline" className={cn(STATUS_BADGE_CLASSES[status])}>
+              {isBusy ? <LoaderCircle className="size-3 animate-spin" /> : null}
+              {STATUS_LABELS[status]}
+            </Badge>
+          </div>
         }
       />
 
@@ -245,6 +282,8 @@ export function IgProfilePageClient({
         canExport={visiblePosts.length > 0}
         isRescanning={isScheduling}
       />
+
+      {accountInsights ? <IgAccountInsightsPanel insights={accountInsights} /> : null}
 
       {posts.length === 0 && isBusy ? (
         <Empty className="border">

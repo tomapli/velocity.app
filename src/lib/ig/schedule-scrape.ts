@@ -6,6 +6,8 @@ export interface ScheduleIgScrapeInput {
   igUsername: string;
   requestedPostCount?: number | null;
   sinceWhen?: string | null;
+  dataSource?: "public" | "meta_hybrid";
+  metaInstagramAccountId?: string | null;
 }
 
 interface ScheduleIgScrapeResponse {
@@ -26,6 +28,8 @@ export async function scheduleIgScrape(
       igUsername: input.igUsername,
       requestedPostCount: input.requestedPostCount ?? null,
       sinceWhen: input.sinceWhen ?? null,
+      dataSource: input.dataSource ?? "public",
+      metaInstagramAccountId: input.metaInstagramAccountId ?? null,
     }),
   });
   const payload = await getResponsePayload(response);

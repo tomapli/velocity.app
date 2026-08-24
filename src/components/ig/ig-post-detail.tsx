@@ -9,6 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   formatCount,
+  formatMilliseconds,
+  formatPercent,
+  formatRatio,
   formatUploadedAt,
   getIgPostMetrics,
   MEDIA_TYPE_LABELS,
@@ -44,6 +47,14 @@ export function IgPostDetail({ username, profile, post }: IgPostDetailProps) {
     { label: "Comments", value: formatCount(post.comment_count) },
     { label: "Saves", value: formatCount(post.save_count) },
     { label: "Shares", value: formatCount(post.share_count) },
+    { label: "Followers from post", value: formatCount(post.follows_count) },
+    { label: "Follower views", value: formatCount(post.follower_view_count) },
+    { label: "Non-follower views", value: formatCount(post.non_follower_view_count) },
+    { label: "Follower/non-follower ratio", value: formatRatio(post.follower_non_follower_ratio) },
+    { label: "Reach", value: formatCount(post.reach_count) },
+    { label: "Hook rate", value: post.hook_rate == null ? null : formatPercent(post.hook_rate) },
+    { label: "Average watch time", value: formatMilliseconds(post.average_watch_time_ms) },
+    { label: "Hold rate", value: post.hold_rate == null ? null : formatPercent(post.hold_rate) },
   ].filter((item) => item.value != null);
 
   return (
@@ -126,10 +137,6 @@ export function IgPostDetail({ username, profile, post }: IgPostDetailProps) {
         </Card>
       ) : null}
 
-      <p className="text-xs text-muted-foreground">
-        Predictive hook/body scores and comment quality are omitted until those fields exist
-        in the scrape.
-      </p>
     </div>
   );
 }
