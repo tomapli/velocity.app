@@ -44,10 +44,9 @@ yarn-error.log*
 .env
 .env**
 !.env.example
-!
-# supabase
-# This file is encrypted it is safe to commit
-!supabase/.env.preview  
+# Encrypted supabase env files are safe to commit (private keys stay in .env.keys)
+!supabase/.env.production
+!supabase/.env.preview
 
 # vercel
 .vercel

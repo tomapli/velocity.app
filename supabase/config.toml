@@ -235,29 +235,27 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Resend SMTP is enabled only for the persistent preview branch. Local development
-# continues to use the Mailpit configuration above.
-[remotes.preview]
-project_id = "wykcqwmrxvgoomltrrlo"
+# Hosted production overrides (merged when `supabase config push --project-ref` matches).
+# Root [auth] stays localhost for local `supabase start`.
+[remotes.production]
+project_id = "rvxyggtcwkapgrpxbkiq"
 
-[remotes.preview.auth]
-site_url = "https://preview.tiimi.cz"
+[remotes.production.auth]
+site_url = "https://app.velocity.ooo"
 additional_redirect_urls = [
-  "https://preview.tiimi.cz/auth/callback",
-  "https://preview.tiimi.cz/auth/confirm-email-change",
+  "https://app.velocity.ooo",
+  "https://app.velocity.ooo/**",
+  "https://app.velocity.ooo/auth/callback",
+  "https://app.velocity.ooo/auth/confirm-email-change",
 ]
 
-[remotes.preview.auth.email]
-max_frequency = "1s"
-
-[remotes.preview.auth.email.smtp]
+# Credentials come from encrypted supabase/.env.production via dotenvx
+# (see docs/CONTRIBUTING.md → Hosted Auth config).
+[remotes.production.auth.external.google]
 enabled = true
-host = "smtp.resend.com"
-port = 465
-user = "resend"
-pass = "env(RESEND_SMTP_PASSWORD)"
-admin_email = "velocitapp-preview@tiimi.cz"
-sender_name = "Velocitapp"
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+skip_nonce_check = false
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

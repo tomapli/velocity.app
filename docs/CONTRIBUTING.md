@@ -67,16 +67,3 @@ pnpm wiki:doctor
 Develop against local Supabase. Studio is at http://localhost:54323. Mailpit (outbound auth email) is at http://localhost:54324.
 
 Cursor MCP for the local project is useful: open Studio and use the connection button at the top.
-
-## Hosted Auth config (CD)
-
-Pushing `supabase/config.toml` (including `before_user_created` and `custom_access_token` hooks) is done by `.github/workflows/supabase-config.yml` on Blacksmith.
-
-Required GitHub repository settings:
-
-| Kind | Name | Value |
-|------|------|--------|
-| Secret | `SUPABASE_ACCESS_TOKEN` | Personal access token from [Account → Access Tokens](https://supabase.com/dashboard/account/tokens) |
-| Variable | `SUPABASE_PRODUCTION_PROJECT_REF` | Production project ref |
-
-Apply migrations on the project before the first config push so the hook functions exist. Re-run via **Actions → Supabase config → Run workflow**.
