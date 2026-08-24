@@ -13,6 +13,7 @@ import {
   META_OAUTH_STATE_MAX_AGE_SECONDS,
 } from "@/lib/meta/constants";
 import { encodeMetaOauthState } from "@/lib/meta/oauth-state";
+import { getMetaOauthRedirectUri } from "@/lib/meta/oauth-url";
 import type { MetaOauthProvider } from "@/lib/meta/types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -69,7 +70,7 @@ export async function GET(
     returnTo: parsed.data.returnTo,
     username: parsed.data.username,
   });
-  const redirectUri = getOauthRedirectUri(request.nextUrl.origin, provider);
+  const redirectUri = getMetaOauthRedirectUri(request, provider);
   const cookieStore = await cookies();
   cookieStore.set(META_OAUTH_STATE_COOKIE, state, {
     httpOnly: true,
@@ -82,10 +83,4 @@ export async function GET(
   return NextResponse.redirect(
     buildMetaAuthorizationUrl(provider, redirectUri, state),
   );
-}
-
-function getOauthRedirectUri(origin: string, provider: MetaOauthProvider): string {
-  const configuredBase = process.env.META_OAUTH_REDIRECT_BASE_URL?.replace(/\/$/, "");
-  const base = configuredBase ?? origin;
-  return `${base}/api/meta/oauth/${provider}/callback`;
 }

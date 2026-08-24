@@ -8,6 +8,10 @@ import {
 } from "@/lib/meta/constants";
 import { saveMetaConnection } from "@/lib/meta/connections";
 import { decodeMetaOauthState } from "@/lib/meta/oauth-state";
+import {
+  getMetaOauthOrigin,
+  getMetaOauthRedirectUri,
+} from "@/lib/meta/oauth-url";
 import type { MetaOauthProvider } from "@/lib/meta/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -18,9 +22,10 @@ export async function GET(
   request: NextRequest,
   context: RouteContext<"/api/meta/oauth/[provider]/callback">,
 ) {
+  const origin = getMetaOauthOrigin(request);
   const { provider: rawProvider } = await context.params;
   if (rawProvider !== "facebook" && rawProvider !== "instagram") {
-    return oauthResult(request.nextUrl.origin, false, "Unknown Meta login provider");
+    return oauthResult(origin, false, "Unknown Meta login provider");
   }
   const provider: MetaOauthProvider = rawProvider;
   const cookieStore = await cookies();
@@ -29,16 +34,16 @@ export async function GET(
   const queryState = request.nextUrl.searchParams.get("state");
   const state = queryState ? decodeMetaOauthState(queryState) : null;
   if (!cookieState || cookieState !== queryState || !state || state.provider !== provider) {
-    return oauthResult(request.nextUrl.origin, false, "The Meta login request expired. Try again.");
+    return oauthResult(origin, false, "The Meta login request expired. Try again.");
   }
 
   const denied = request.nextUrl.searchParams.get("error_description");
   if (denied) {
-    return oauthResult(request.nextUrl.origin, false, denied);
+    return oauthResult(origin, false, denied);
   }
   const code = request.nextUrl.searchParams.get("code");
   if (!code) {
-    return oauthResult(request.nextUrl.origin, false, "Meta did not return an authorization code.");
+    return oauthResult(origin, false, "Meta did not return an authorization code.");
   }
 
   const supabase = await createClient();
@@ -47,11 +52,11 @@ export async function GET(
     error,
   } = await supabase.auth.getUser();
   if (error || !user) {
-    return oauthResult(request.nextUrl.origin, false, "Your Velocity session expired. Sign in and try again.");
+    return oauthResult(origin, false, "Your Velocity session expired. Sign in and try again.");
   }
 
   try {
-    const redirectUri = getOauthRedirectUri(request.nextUrl.origin, provider);
+    const redirectUri = getMetaOauthRedirectUri(request, provider);
     const access = await exchangeMetaOauthCode(provider, code, redirectUri);
     const saved = await saveMetaConnection({
       admin: createAdminClient(),
@@ -63,7 +68,7 @@ export async function GET(
       (account) => account.username.toLowerCase() === state.username,
     );
     return oauthResult(
-      request.nextUrl.origin,
+      origin,
       true,
       state.username === "__workspace__"
         ? `Connected ${saved.connection.display_name}.`
@@ -73,17 +78,11 @@ export async function GET(
     );
   } catch (oauthError) {
     return oauthResult(
-      request.nextUrl.origin,
+      origin,
       false,
       oauthError instanceof Error ? oauthError.message : "Could not connect Meta",
     );
   }
-}
-
-function getOauthRedirectUri(origin: string, provider: MetaOauthProvider): string {
-  const configuredBase = process.env.META_OAUTH_REDIRECT_BASE_URL?.replace(/\/$/, "");
-  const base = configuredBase ?? origin;
-  return `${base}/api/meta/oauth/${provider}/callback`;
 }
 
 function oauthResult(origin: string, success: boolean, message: string): Response {

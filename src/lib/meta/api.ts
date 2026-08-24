@@ -7,6 +7,8 @@ import {
   META_INSTAGRAM_SCOPES,
   META_MEDIA_PAGE_SIZE,
 } from "@/lib/meta/constants";
+import { getGrantedFacebookPageIds } from "@/lib/meta/facebook-token";
+import { getMetaInstagramProfileFields } from "@/lib/meta/fields";
 import type { MetaOauthProvider } from "@/lib/meta/types";
 
 const MetaErrorSchema = z.object({
@@ -43,23 +45,22 @@ const InstagramIdentitySchema = z.object({
   media_count: z.number().int().nonnegative().nullable().optional(),
 });
 
-const FacebookPagesSchema = z.object({
-  data: z.array(
-    z.object({
+const FacebookPageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  access_token: z.string().min(1),
+  tasks: z.array(z.string()).optional(),
+  instagram_business_account: z
+    .object({
       id: z.string(),
-      name: z.string(),
-      access_token: z.string().min(1),
-      instagram_business_account: z
-        .object({
-          id: z.string(),
-          username: z.string().optional(),
-          name: z.string().nullable().optional(),
-          profile_picture_url: z.string().url().nullable().optional(),
-        })
-        .optional(),
-    }),
-  ),
+      username: z.string().optional(),
+      name: z.string().nullable().optional(),
+      profile_picture_url: z.string().url().nullable().optional(),
+    })
+    .optional(),
 });
+
+const FacebookPagesSchema = z.object({ data: z.array(FacebookPageSchema) });
 
 const MetaPagingSchema = z.object({
   next: z.string().url().optional(),
@@ -291,17 +292,9 @@ export async function discoverMetaInstagramAccounts(
     ];
   }
 
-  const raw = await fetchMetaJson(
-    buildGraphUrl("facebook", "me/accounts", {
-      fields:
-        "id,name,access_token,tasks,instagram_business_account{id,username,name,profile_picture_url}",
-      limit: String(META_MEDIA_PAGE_SIZE),
-    }),
-    token,
-  );
-  const pages = FacebookPagesSchema.parse(raw);
+  const pages = await discoverFacebookPages(token);
 
-  return pages.data.flatMap((page) => {
+  return pages.flatMap((page) => {
     const account = page.instagram_business_account;
     if (!account?.username) {
       return [];
@@ -319,6 +312,73 @@ export async function discoverMetaInstagramAccounts(
   });
 }
 
+async function discoverFacebookPages(
+  token: string,
+): Promise<Array<z.infer<typeof FacebookPageSchema>>> {
+  const raw = await fetchMetaJson(
+    buildGraphUrl("facebook", "me/accounts", {
+      fields:
+        "id,name,access_token,tasks,instagram_business_account{id,username,name,profile_picture_url}",
+      limit: String(META_MEDIA_PAGE_SIZE),
+    }),
+    token,
+  );
+  const managedPages = FacebookPagesSchema.parse(raw).data;
+  const managedPageIds = new Set(managedPages.map((page) => page.id));
+
+  let grantedPageIds: string[];
+  try {
+    grantedPageIds = await getGrantedPageIdsFromToken(token);
+  } catch (error) {
+    if (managedPages.length === 0) {
+      throw error;
+    }
+    return managedPages;
+  }
+
+  const missingPageIds = grantedPageIds.filter(
+    (pageId) => !managedPageIds.has(pageId),
+  );
+  const settledPages = await Promise.allSettled(
+    missingPageIds.map(async (pageId) => {
+      const page = await fetchMetaJson(
+        buildGraphUrl("facebook", pageId, {
+          fields:
+            "id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}",
+        }),
+        token,
+      );
+      return FacebookPageSchema.parse(page);
+    }),
+  );
+  const grantedPages = settledPages.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
+  );
+
+  if (
+    managedPages.length === 0 &&
+    missingPageIds.length > 0 &&
+    grantedPages.length === 0
+  ) {
+    const failure = settledPages.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    throw failure?.reason instanceof Error
+      ? failure.reason
+      : new Error("Meta granted Page access, but its details could not be loaded.");
+  }
+
+  return [...managedPages, ...grantedPages];
+}
+
+async function getGrantedPageIdsFromToken(token: string): Promise<string[]> {
+  const raw = await fetchMetaJson(
+    buildGraphUrl("facebook", "debug_token", { input_token: token }),
+    `${getMetaAppId("facebook")}|${getMetaAppSecret("facebook")}`,
+  );
+  return getGrantedFacebookPageIds(raw);
+}
+
 export async function getMetaInstagramProfile(params: {
   provider: MetaOauthProvider;
   igUserId: string;
@@ -327,7 +387,7 @@ export async function getMetaInstagramProfile(params: {
   const objectId = params.provider === "instagram" ? "me" : params.igUserId;
   const raw = await fetchMetaJson(
     buildGraphUrl(params.provider, objectId, {
-      fields: "id,user_id,username,name,profile_picture_url,followers_count,media_count",
+      fields: getMetaInstagramProfileFields(params.provider),
     }),
     params.token,
   );

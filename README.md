@@ -19,10 +19,16 @@
 
 The workspace can reuse multiple Facebook Login for Business and Instagram
 Business Login connections. Configure the `META_*` values shown in
-`.env.example`, then register these exact OAuth redirect URLs in the Meta app:
+`.env.example`, then register these exact OAuth redirect URLs for every app
+origin used by testers (for example, `https://app.velocity.ooo` and
+`http://localhost:3000`) in the Meta app:
 
-- `<META_OAUTH_REDIRECT_BASE_URL>/api/meta/oauth/facebook/callback`
-- `<META_OAUTH_REDIRECT_BASE_URL>/api/meta/oauth/instagram/callback`
+- `<APP_ORIGIN>/api/meta/oauth/facebook/callback`
+- `<APP_ORIGIN>/api/meta/oauth/instagram/callback`
+
+Velocity derives the callback origin from the request, including trusted proxy
+forwarding headers, so a production or tunnel login does not return to
+localhost.
 
 Facebook Login requests `instagram_basic`, `instagram_manage_insights`,
 `pages_read_engagement`, and `pages_show_list`. Instagram Login requests

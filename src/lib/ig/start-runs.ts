@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { getErrorMessage } from "@/lib/errors";
 import {
   APIFY_DETAILS_BATCH_SIZE,
   APIFY_INSTAGRAM_POST_DETAILS_ACTOR_ID,
@@ -140,7 +141,7 @@ export async function startDetailsBatchForGroup(
 
     return updated;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not start Apify";
+    const message = getErrorMessage(error, "Could not start Apify");
     await supabase
       .from("scheduled_scrapes")
       .update({

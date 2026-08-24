@@ -1,10 +1,14 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getErrorMessage } from "@/lib/errors";
 import { buildIgScrapeJobs } from "@/lib/ig/groups";
 import { startListingRun } from "@/lib/ig/start-runs";
 import { upsertIgProfile } from "@/lib/ig/queries";
-import { resolveMetaAccountAccess } from "@/lib/meta/connections";
+import {
+  resolveMetaAccountAccess,
+  type ResolvedMetaAccountAccess,
+} from "@/lib/meta/connections";
 import { importMetaScrape } from "@/lib/meta/scrape";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -56,6 +60,26 @@ export async function POST(request: Request) {
   });
   const requestedPostCount = parsedBody.data.requestedPostCount ?? null;
   const sinceWhen = parsedBody.data.sinceWhen ?? null;
+  let metaAccess: ResolvedMetaAccountAccess | null = null;
+
+  if (
+    parsedBody.data.dataSource === "meta_hybrid" &&
+    parsedBody.data.metaInstagramAccountId
+  ) {
+    try {
+      metaAccess = await resolveMetaAccountAccess(
+        admin,
+        parsedBody.data.metaInstagramAccountId,
+        profile.ig_username,
+      );
+    } catch (error) {
+      return NextResponse.json(
+        { error: getErrorMessage(error, "Could not validate Meta access") },
+        { status: 502 },
+      );
+    }
+  }
+
   const { data: group, error: groupError } = await supabase
     .from("groups")
     .insert({
@@ -68,6 +92,7 @@ export async function POST(request: Request) {
         parsedBody.data.dataSource === "meta_hybrid"
           ? parsedBody.data.metaInstagramAccountId
           : null,
+      meta_connection_id: metaAccess?.connection.id ?? null,
     })
     .select("*")
     .single();
@@ -99,31 +124,17 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (
-      parsedBody.data.dataSource === "meta_hybrid" &&
-      parsedBody.data.metaInstagramAccountId
-    ) {
-      const access = await resolveMetaAccountAccess(
+    let metaImport: Parameters<typeof importMetaScrape>[0] | null = null;
+    if (metaAccess) {
+      metaImport = {
         admin,
-        parsedBody.data.metaInstagramAccountId,
-        profile.ig_username,
-      );
-      const { error: connectionError } = await admin
-        .from("groups")
-        .update({ meta_connection_id: access.connection.id })
-        .eq("id", group.id);
-      if (connectionError) {
-        throw connectionError;
-      }
-      await importMetaScrape({
-        admin,
-        access,
+        access: metaAccess,
         groupId: group.id,
         profileId: profile.id,
         requestedPostCount,
         sinceWhen,
         listingScrapes: scrapes,
-      });
+      };
     }
 
     const started = await Promise.all(
@@ -157,9 +168,25 @@ export async function POST(request: Request) {
       started,
       new Map([[profile.id, profile]]),
     )[0];
+
+    if (metaImport) {
+      const importParams = metaImport;
+      after(async () => {
+        try {
+          await importMetaScrape(importParams);
+        } catch (error) {
+          console.error("Meta scrape import failed", {
+            error,
+            groupId: importParams.groupId,
+            profileId: importParams.profileId,
+          });
+        }
+      });
+    }
+
     return NextResponse.json({ job }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not start Apify";
+    const message = getErrorMessage(error, "Could not start scrape");
     await admin.from("groups").delete().eq("id", group.id);
 
     return NextResponse.json({ error: message, groupId: group.id }, { status: 502 });
