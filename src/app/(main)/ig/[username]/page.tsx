@@ -30,7 +30,7 @@ export default async function IgProfilePage({ params }: IgProfilePageProps) {
     );
     if (hasUnsettledRuns) {
       const admin = createAdminClient();
-      await syncUnsettledApifyRunsForGroup(admin, apifyToken, latestJob.groupId);
+      await syncUnsettledApifyRunsForGroup(admin, apifyToken, latestJob.group.id);
       latestJob = await getLatestIgScrapeJobForUsername(supabase, username);
     }
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getCanonicalInstagramPostUrl,
   getInstagramShortcode,
   mapInstagramListingItem,
   mapInstagramListingProfile,
@@ -8,6 +9,7 @@ import {
 import {
   mapInstagramDetailsProfile,
   mapInstagramPostDetails,
+  toInstagramPostDetailsUpdate,
 } from "@/lib/apify/instagram-post-details";
 
 describe("mapInstagramListingItem", () => {
@@ -25,14 +27,22 @@ describe("mapInstagramListingItem", () => {
     });
   });
 
-  it("builds a URL from a shortcode when the listing omits url", () => {
+  it("uses the same canonical URL for post and reel aliases", () => {
     expect(
       mapInstagramListingItem({
         shortCode: "DEF456",
         type: "Video",
       }),
     ).toMatchObject({
-      postUrl: "https://www.instagram.com/reel/DEF456/",
+      postUrl: "https://www.instagram.com/p/DEF456/",
+    });
+
+    expect(
+      mapInstagramListingItem({
+        url: "https://www.instagram.com/reel/DEF456/?hl=en",
+      }),
+    ).toMatchObject({
+      postUrl: "https://www.instagram.com/p/DEF456/",
     });
   });
 });
@@ -43,6 +53,14 @@ describe("getInstagramShortcode", () => {
     expect(getInstagramShortcode("https://www.instagram.com/reel/DEF456/?hl=en")).toBe(
       "DEF456",
     );
+  });
+
+  it("canonicalizes post and reel aliases to one unique URL", () => {
+    expect(
+      getCanonicalInstagramPostUrl(
+        "https://www.instagram.com/reel/DEF456/?hl=en",
+      ),
+    ).toBe("https://www.instagram.com/p/DEF456/");
   });
 });
 
@@ -142,6 +160,17 @@ describe("mapInstagramPostDetails", () => {
       post_url: "https://www.instagram.com/reel/DLcNbiWM15K/",
       description: null,
     });
+  });
+
+  it("keeps the listing URL out of detail updates", () => {
+    const details = mapInstagramPostDetails({
+      code: "ABC123",
+      is_video: true,
+      taken_at_date: "2026-08-20T10:00:00+00:00",
+    });
+
+    expect(details).not.toBeNull();
+    expect(toInstagramPostDetailsUpdate(details!)).not.toHaveProperty("post_url");
   });
 });
 

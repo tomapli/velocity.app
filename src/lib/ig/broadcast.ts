@@ -1,5 +1,4 @@
-import type { IgProfile } from "@/lib/ig/queries";
-import type { ScheduledScrape } from "@/lib/ig/queries";
+import type { Group, IgProfile, ScheduledScrape } from "@/lib/ig/queries";
 
 interface BroadcastChangePayload {
   record?: unknown;
@@ -42,6 +41,18 @@ export function scheduledScrapeFromBroadcastPayload(
   }
 
   return row as ScheduledScrape;
+}
+
+export function groupFromBroadcastPayload(
+  payload: unknown,
+  operation: "INSERT" | "UPDATE" | "DELETE",
+): Group | null {
+  const row = rowFromBroadcastPayload(payload, operation);
+  if (typeof row?.id !== "string" || typeof row.ig_profile_id !== "string") {
+    return null;
+  }
+
+  return row as Group;
 }
 
 export function igProfileFromBroadcastPayload(

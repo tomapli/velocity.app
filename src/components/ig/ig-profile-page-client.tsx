@@ -33,15 +33,16 @@ import {
   type IgPostSortKey,
 } from "@/lib/ig/metrics";
 import {
+  buildIgScrapeJobs,
   getIgScrapeJobStatus,
   getJobErrorMessage,
-  groupScheduledScrapes,
   isIgScrapeJobStale,
+  upsertGroup,
   upsertScheduledScrape,
   type IgScrapeJob,
   type IgScrapeStatus,
 } from "@/lib/ig/groups";
-import type { IgPost, IgProfile, ScheduledScrape } from "@/lib/ig/queries";
+import type { Group, IgPost, IgProfile, ScheduledScrape } from "@/lib/ig/queries";
 import { listIgPostsForProfile } from "@/lib/ig/queries";
 import { scheduleIgScrape } from "@/lib/ig/schedule-scrape";
 import { useIgScrapesRealtime } from "@/lib/ig/use-ig-scrapes-realtime";
@@ -72,6 +73,7 @@ export function IgProfilePageClient({
   initialPosts,
 }: IgProfilePageClientProps) {
   const [profile, setProfile] = useState<IgProfile | null>(initialJob?.profile ?? null);
+  const [groups, setGroups] = useState<Group[]>(initialJob ? [initialJob.group] : []);
   const [scrapes, setScrapes] = useState<ScheduledScrape[]>(initialJob?.scrapes ?? []);
   const [posts, setPosts] = useState<IgPost[]>(initialPosts);
   const [promptMode, setPromptMode] = useState<PromptMode>(() =>
@@ -89,17 +91,28 @@ export function IgProfilePageClient({
     }
 
     return (
-      groupScheduledScrapes(scrapes, new Map([[profile.id, profile]]))[0] ?? null
+      buildIgScrapeJobs(groups, scrapes, new Map([[profile.id, profile]]))[0] ?? null
     );
-  }, [profile, scrapes]);
+  }, [groups, profile, scrapes]);
 
   const upsertScrape = useCallback(
     (next: ScheduledScrape) => {
-      if (profile && next.ig_profile_id !== profile.id) {
+      if (!groups.some((group) => group.id === next.group_id)) {
         return;
       }
 
       setScrapes((current) => upsertScheduledScrape(current, next));
+    },
+    [groups],
+  );
+
+  const upsertNextGroup = useCallback(
+    (next: Group) => {
+      if (profile && next.ig_profile_id !== profile.id) {
+        return;
+      }
+
+      setGroups((current) => upsertGroup(current, next));
     },
     [profile],
   );
@@ -109,6 +122,11 @@ export function IgProfilePageClient({
     onScrapeUpdate: upsertScrape,
     onScrapeDelete: (scrape) => {
       setScrapes((current) => current.filter((row) => row.id !== scrape.id));
+    },
+    onGroupInsert: upsertNextGroup,
+    onGroupUpdate: upsertNextGroup,
+    onGroupDelete: (group) => {
+      setGroups((current) => current.filter((row) => row.id !== group.id));
     },
     onProfileUpdate: (next) => {
       if (next.ig_username !== username) {
@@ -176,6 +194,7 @@ export function IgProfilePageClient({
       });
 
       setProfile(created.profile);
+      setGroups([created.group]);
       setScrapes(created.scrapes);
       setPosts([]);
       setParamsDialogOpen(false);

@@ -1,60 +1,59 @@
-import type { IgProfile, ScheduledScrape } from "@/lib/ig/queries";
 import { IG_STALE_MS } from "@/lib/ig/constants";
+import type { Group, IgProfile, ScheduledScrape } from "@/lib/ig/queries";
 
 export type IgScrapeStatus = "waiting" | "scraping" | "ready" | "error";
 
 export interface IgScrapeJob {
-  groupId: string;
+  group: Group;
   profile: IgProfile;
   scrapes: ScheduledScrape[];
 }
 
 /**
- * Groups scheduled scrapes that belong to the same user request.
+ * Builds scrape-history jobs from group rows and their scheduled child runs.
  */
-export function groupScheduledScrapes(
+export function buildIgScrapeJobs(
+  groups: Group[],
   scrapes: ScheduledScrape[],
   profiles: Map<string, IgProfile>,
 ): IgScrapeJob[] {
-  const byGroup = new Map<string, ScheduledScrape[]>();
+  const scrapesByGroup = new Map<string, ScheduledScrape[]>();
 
   for (const scrape of scrapes) {
-    const current = byGroup.get(scrape.group_id) ?? [];
+    const current = scrapesByGroup.get(scrape.group_id) ?? [];
     current.push(scrape);
-    byGroup.set(scrape.group_id, current);
+    scrapesByGroup.set(scrape.group_id, current);
   }
 
-  return [...byGroup.entries()]
-    .map(([groupId, groupScrapes]) => {
-      const profile = profiles.get(groupScrapes[0]?.ig_profile_id ?? "");
+  return groups
+    .map((group) => {
+      const profile = profiles.get(group.ig_profile_id);
       if (!profile) {
         return null;
       }
 
       return {
-        groupId,
+        group,
         profile,
-        scrapes: groupScrapes.sort((left, right) =>
+        scrapes: [...(scrapesByGroup.get(group.id) ?? [])].sort((left, right) =>
           left.created_at.localeCompare(right.created_at),
         ),
       };
     })
     .filter((job): job is IgScrapeJob => job !== null)
-    .sort((left, right) =>
-      getJobCreatedAt(right).localeCompare(getJobCreatedAt(left)),
-    );
+    .sort((left, right) => right.group.created_at.localeCompare(left.group.created_at));
 }
 
 export function getJobCreatedAt(job: IgScrapeJob): string {
-  return job.scrapes[0]?.created_at ?? job.profile.created_at;
+  return job.group.created_at;
 }
 
 export function getJobRequestedPostCount(job: IgScrapeJob): number | null {
-  return job.scrapes[0]?.requested_post_count ?? null;
+  return job.group.requested_post_count;
 }
 
 export function getJobSinceWhen(job: IgScrapeJob): string | null {
-  return job.scrapes[0]?.since_when ?? null;
+  return job.group.since_when;
 }
 
 export function getJobErrorMessage(job: IgScrapeJob): string | null {
@@ -120,4 +119,8 @@ export function upsertScheduledScrape(
   next: ScheduledScrape,
 ): ScheduledScrape[] {
   return [next, ...scrapes.filter((scrape) => scrape.id !== next.id)];
+}
+
+export function upsertGroup(groups: Group[], next: Group): Group[] {
+  return [next, ...groups.filter((group) => group.id !== next.id)];
 }

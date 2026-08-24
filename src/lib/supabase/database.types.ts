@@ -33,6 +33,41 @@ export type Database = {
         }
         Relationships: []
       }
+      groups: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          ig_profile_id: string
+          requested_post_count: number | null
+          since_when: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          ig_profile_id: string
+          requested_post_count?: number | null
+          since_when?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          ig_profile_id?: string
+          requested_post_count?: number | null
+          since_when?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "groups_ig_profile_id_fkey"
+            columns: ["ig_profile_id"]
+            isOneToOne: false
+            referencedRelation: "ig_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ig_posts: {
         Row: {
           carousel_image_urls: string[] | null
@@ -160,27 +195,6 @@ export type Database = {
         }
         Relationships: []
       }
-      items: {
-        Row: {
-          created_at: string
-          created_by: string
-          id: string
-          title: string
-        }
-        Insert: {
-          created_at?: string
-          created_by: string
-          id?: string
-          title: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string
-          id?: string
-          title?: string
-        }
-        Relationships: []
-      }
       scheduled_scrapes: {
         Row: {
           apify_called_at: string | null
@@ -190,11 +204,7 @@ export type Database = {
           finished_at: string | null
           group_id: string
           id: string
-          ig_profile_id: string
-          requested_post_count: number | null
           scrape_type: Database["public"]["Enums"]["scheduled_scrape_type"]
-          since_when: string | null
-          started_by: string
           updated_at: string
         }
         Insert: {
@@ -205,11 +215,7 @@ export type Database = {
           finished_at?: string | null
           group_id: string
           id?: string
-          ig_profile_id: string
-          requested_post_count?: number | null
           scrape_type: Database["public"]["Enums"]["scheduled_scrape_type"]
-          since_when?: string | null
-          started_by: string
           updated_at?: string
         }
         Update: {
@@ -220,19 +226,15 @@ export type Database = {
           finished_at?: string | null
           group_id?: string
           id?: string
-          ig_profile_id?: string
-          requested_post_count?: number | null
           scrape_type?: Database["public"]["Enums"]["scheduled_scrape_type"]
-          since_when?: string | null
-          started_by?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "scheduled_scrapes_ig_profile_id_fkey"
-            columns: ["ig_profile_id"]
+            foreignKeyName: "scheduled_scrapes_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: "ig_profiles"
+            referencedRelation: "groups"
             referencedColumns: ["id"]
           },
         ]

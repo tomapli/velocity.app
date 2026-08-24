@@ -1,5 +1,7 @@
 export const IG_SCRAPES_REALTIME_TOPIC = "public:scheduled_scrapes";
 
+export const IG_GROUPS_REALTIME_TOPIC = "public:groups";
+
 export const IG_PROFILES_REALTIME_TOPIC = "public:ig_profiles";
 
 export const IG_SCRAPES_REALTIME_EVENTS = {

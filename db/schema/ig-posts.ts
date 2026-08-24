@@ -119,8 +119,9 @@ export const igPosts = pgTable(
       withCheck: sql`EXISTS (
         SELECT 1
         FROM public.scheduled_scrapes
+        INNER JOIN public.groups ON groups.id = scheduled_scrapes.group_id
         WHERE scheduled_scrapes.id = source_scrape_id
-          AND scheduled_scrapes.started_by = (SELECT auth.uid() AS uid)
+          AND groups.created_by = (SELECT auth.uid() AS uid)
       )`,
     }),
     pgPolicy("Authenticated users can update ig posts for their scrapes", {
@@ -130,14 +131,16 @@ export const igPosts = pgTable(
       using: sql`EXISTS (
         SELECT 1
         FROM public.scheduled_scrapes
+        INNER JOIN public.groups ON groups.id = scheduled_scrapes.group_id
         WHERE scheduled_scrapes.id = source_scrape_id
-          AND scheduled_scrapes.started_by = (SELECT auth.uid() AS uid)
+          AND groups.created_by = (SELECT auth.uid() AS uid)
       )`,
       withCheck: sql`EXISTS (
         SELECT 1
         FROM public.scheduled_scrapes
+        INNER JOIN public.groups ON groups.id = scheduled_scrapes.group_id
         WHERE scheduled_scrapes.id = source_scrape_id
-          AND scheduled_scrapes.started_by = (SELECT auth.uid() AS uid)
+          AND groups.created_by = (SELECT auth.uid() AS uid)
       )`,
     }),
   ],

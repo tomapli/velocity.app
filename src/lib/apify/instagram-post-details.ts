@@ -156,6 +156,16 @@ export function mapInstagramPostDetails(
   };
 }
 
+/**
+ * Keeps the listing URL as the row identity while applying canonical detail data.
+ */
+export function toInstagramPostDetailsUpdate(
+  details: MappedInstagramPostDetails,
+): Omit<MappedInstagramPostDetails, "post_url"> {
+  const { post_url: _postUrl, ...update } = details;
+  return update;
+}
+
 export function mapInstagramDetailsProfile(
   value: unknown,
 ): Updatable<"ig_profiles"> {

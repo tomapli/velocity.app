@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getActorRun, getDatasetItems } from "@/lib/apify/client";
 import {
+  getCanonicalInstagramPostUrl,
   getInstagramShortcode,
   mapInstagramListingItem,
   mapInstagramListingProfile,
@@ -10,6 +11,7 @@ import {
 import {
   mapInstagramDetailsProfile,
   mapInstagramPostDetails,
+  toInstagramPostDetailsUpdate,
 } from "@/lib/apify/instagram-post-details";
 import {
   hasInFlightDetailsScrape,
@@ -25,6 +27,7 @@ const APIFY_FAILED_STATUSES = new Set(["ABORTED", "FAILED", "TIMED-OUT"]);
 const UPSERT_BATCH_SIZE = 100;
 
 type AdminClient = SupabaseClient<Database>;
+type Group = Tables<"groups">;
 type ScheduledScrape = Tables<"scheduled_scrapes">;
 
 /**
@@ -36,6 +39,7 @@ export async function processSucceededApifyRun(
   token: string,
   datasetId?: string | null,
 ): Promise<{ importedPostCount?: number; batchHadOlderPost?: boolean }> {
+  const group = await getGroup(admin, scrape.group_id);
   const actorRun = datasetId ? null : await getActorRun(token, scrape.apify_run_id!);
   const dataset = await getDatasetItems(
     token,
@@ -43,7 +47,7 @@ export async function processSucceededApifyRun(
   );
 
   if (scrape.scrape_type === "post_details") {
-    const imported = await importDetails(admin, scrape, dataset);
+    const imported = await importDetails(admin, group, scrape, dataset);
     await finishScrape(admin, scrape.id);
 
     return {
@@ -52,7 +56,7 @@ export async function processSucceededApifyRun(
     };
   }
 
-  await importListing(admin, scrape, dataset);
+  await importListing(admin, group, scrape, dataset);
   await finishScrape(admin, scrape.id);
 
   return {};
@@ -149,13 +153,14 @@ export async function markScrapeFailedAndAdvance(
 
 async function importListing(
   admin: AdminClient,
+  group: Group,
   scrape: ScheduledScrape,
   dataset: unknown[],
 ): Promise<void> {
   const items = dataset
     .map((item) => mapInstagramListingItem(item))
     .filter((item): item is NonNullable<typeof item> => item !== null);
-  const sinceTimestamp = scrape.since_when ? Date.parse(scrape.since_when) : null;
+  const sinceTimestamp = group.since_when ? Date.parse(group.since_when) : null;
   const pending = items
     .filter((item) => {
       if (!sinceTimestamp || !item.uploadedAt) {
@@ -165,16 +170,43 @@ async function importListing(
       const uploadedAt = Date.parse(item.uploadedAt);
       return !Number.isFinite(uploadedAt) || uploadedAt >= sinceTimestamp;
     })
-    .map((item) => toPendingIgPost(scrape.ig_profile_id, scrape.id, item));
+    .map((item) => toPendingIgPost(group.ig_profile_id, scrape.id, item));
+  const pendingByUrl = new Map(pending.map((post) => [post.post_url, post]));
+  const uniquePending = [...pendingByUrl.values()];
 
-  for (let index = 0; index < pending.length; index += UPSERT_BATCH_SIZE) {
+  const { data: existingPosts, error: existingPostsError } = await admin
+    .from("ig_posts")
+    .select("id, post_url")
+    .eq("ig_profile_id", group.ig_profile_id);
+  if (existingPostsError) {
+    throw existingPostsError;
+  }
+
+  for (let index = 0; index < uniquePending.length; index += UPSERT_BATCH_SIZE) {
     const { error } = await admin.from("ig_posts").upsert(
-      pending.slice(index, index + UPSERT_BATCH_SIZE),
+      uniquePending.slice(index, index + UPSERT_BATCH_SIZE),
       {
         onConflict: "ig_profile_id,post_url",
-        ignoreDuplicates: true,
       },
     );
+    if (error) {
+      throw error;
+    }
+  }
+
+  const importedUrls = new Set(uniquePending.map((post) => post.post_url));
+  const duplicateIds = (existingPosts ?? [])
+    .filter((post) => {
+      const canonicalUrl = getCanonicalInstagramPostUrl(post.post_url);
+      return importedUrls.has(canonicalUrl) && post.post_url !== canonicalUrl;
+    })
+    .map((post) => post.id);
+
+  for (let index = 0; index < duplicateIds.length; index += UPSERT_BATCH_SIZE) {
+    const { error } = await admin
+      .from("ig_posts")
+      .delete()
+      .in("id", duplicateIds.slice(index, index + UPSERT_BATCH_SIZE));
     if (error) {
       throw error;
     }
@@ -187,7 +219,7 @@ async function importListing(
     const { error } = await admin
       .from("ig_profiles")
       .update(profileUpdate)
-      .eq("id", scrape.ig_profile_id);
+      .eq("id", group.ig_profile_id);
     if (error) {
       throw error;
     }
@@ -196,13 +228,14 @@ async function importListing(
 
 async function importDetails(
   admin: AdminClient,
+  group: Group,
   scrape: ScheduledScrape,
   dataset: unknown[],
 ): Promise<{ updatedCount: number; batchHadOlderPost: boolean }> {
   const { data: existing, error: existingError } = await admin
     .from("ig_posts")
     .select("id, post_url")
-    .eq("ig_profile_id", scrape.ig_profile_id);
+    .eq("ig_profile_id", group.ig_profile_id);
 
   if (existingError) {
     throw existingError;
@@ -221,7 +254,7 @@ async function importDetails(
     byShortcode.set(shortcode, ids);
   }
 
-  const sinceTimestamp = scrape.since_when ? Date.parse(scrape.since_when) : null;
+  const sinceTimestamp = group.since_when ? Date.parse(group.since_when) : null;
   let updatedCount = 0;
   let batchHadOlderPost = false;
 
@@ -232,6 +265,7 @@ async function importDetails(
     }
 
     const shortcode = getInstagramShortcode(details.post_url);
+    const detailsUpdate = toInstagramPostDetailsUpdate(details);
     const postIds = shortcode ? byShortcode.get(shortcode) : undefined;
     if (!postIds?.length) {
       continue;
@@ -247,7 +281,7 @@ async function importDetails(
       const { error } = await admin
         .from("ig_posts")
         .update({
-          ...details,
+          ...detailsUpdate,
           details_scrape_id: scrape.id,
         })
         .eq("id", postId);
@@ -266,7 +300,7 @@ async function importDetails(
     const { error } = await admin
       .from("ig_profiles")
       .update(profileUpdate)
-      .eq("id", scrape.ig_profile_id);
+      .eq("id", group.ig_profile_id);
     if (error) {
       throw error;
     }
@@ -306,13 +340,19 @@ async function maybeContinueDetails(
   batchHadOlderPost: boolean,
   batchUpdatedCount: number,
 ): Promise<boolean> {
-  const { data: scrapes, error } = await admin
-    .from("scheduled_scrapes")
-    .select("*")
-    .eq("group_id", scrape.group_id);
+  const [
+    { data: group, error: groupError },
+    { data: scrapes, error: scrapesError },
+  ] = await Promise.all([
+    admin.from("groups").select("*").eq("id", scrape.group_id).single(),
+    admin.from("scheduled_scrapes").select("*").eq("group_id", scrape.group_id),
+  ]);
 
-  if (error) {
-    throw error;
+  if (groupError) {
+    throw groupError;
+  }
+  if (scrapesError) {
+    throw scrapesError;
   }
 
   if (hasInFlightDetailsScrape(scrapes ?? [])) {
@@ -344,7 +384,7 @@ async function maybeContinueDetails(
     !shouldContinueDetails({
       pendingUrlCount: pendingCount ?? 0,
       detailedPostCount: detailedCount ?? 0,
-      requestedPostCount: scrape.requested_post_count,
+      requestedPostCount: group.requested_post_count,
       batchHadOlderPost,
       batchUpdatedCount,
     })
@@ -354,6 +394,20 @@ async function maybeContinueDetails(
 
   const started = await startDetailsBatchForGroup(admin, token, scrape.group_id);
   return started != null;
+}
+
+async function getGroup(admin: AdminClient, groupId: string): Promise<Group> {
+  const { data, error } = await admin
+    .from("groups")
+    .select("*")
+    .eq("id", groupId)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
 }
 
 async function finishScrape(admin: AdminClient, scrapeId: string): Promise<void> {

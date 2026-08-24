@@ -84,6 +84,60 @@ describe("ig_profiles", () => {
   });
 });
 
+describe("groups", () => {
+  describe("RLS", () => {
+    it("lets authenticated users insert their own scrape group", async () => {
+      await withRollback(async (client) => {
+        const auth = await insertAuthUser(client);
+        await asClaims(client, { sub: auth.id });
+        const profileId = await insertProfile(client, auth.id);
+
+        const { rows } = await client.query(
+          `insert into public.groups (ig_profile_id, created_by, requested_post_count)
+           values ($1, $2, $3)
+           returning created_by as "createdBy", requested_post_count as "requestedPostCount"`,
+          [profileId, auth.id, 24],
+        );
+
+        expect(rows[0]).toEqual({
+          createdBy: auth.id,
+          requestedPostCount: 24,
+        });
+      });
+    });
+
+    it("rejects groups attributed to another user", async () => {
+      await withRollback(async (client) => {
+        const owner = await insertAuthUser(client);
+        const other = await insertAuthUser(client);
+        const profileId = await insertProfile(client, owner.id);
+        await asClaims(client, { sub: other.id });
+
+        await expect(
+          client.query(
+            `insert into public.groups (ig_profile_id, created_by)
+             values ($1, $2)`,
+            [profileId, owner.id],
+          ),
+        ).rejects.toThrow(/permission denied|violates row-level security/);
+      });
+    });
+
+    it("hides scrape history from anonymous visitors", async () => {
+      await withRollback(async (client) => {
+        const auth = await insertAuthUser(client);
+        const profileId = await insertProfile(client, auth.id);
+        await insertGroup(client, profileId, auth.id);
+        await asAnon(client);
+
+        await expect(
+          client.query("select count(*)::int as cnt from public.groups"),
+        ).rejects.toThrow(/permission denied/);
+      });
+    });
+  });
+});
+
 describe("scheduled_scrapes", () => {
   describe("constraints", () => {
     it("stores apify_run_id when the actor is started", async () => {
@@ -91,14 +145,15 @@ describe("scheduled_scrapes", () => {
         const auth = await insertAuthUser(client);
         await asClaims(client, { sub: auth.id });
         const profileId = await insertProfile(client, auth.id);
+        const groupId = await insertGroup(client, profileId, auth.id);
 
         const { rows } = await client.query(
           `insert into public.scheduled_scrapes (
-             ig_profile_id, started_by, group_id, scrape_type, apify_run_id, apify_called_at
+             group_id, scrape_type, apify_run_id, apify_called_at
            )
-           values ($1, $2, $3, $4, $5, now())
+           values ($1, $2, $3, now())
            returning apify_run_id as "apifyRunId"`,
-          [profileId, auth.id, crypto.randomUUID(), "posts", "sxfSOvMdx4kXZjQ0r"],
+          [groupId, "posts", "sxfSOvMdx4kXZjQ0r"],
         );
 
         expect(rows[0].apifyRunId).toBe("sxfSOvMdx4kXZjQ0r");
@@ -110,24 +165,40 @@ describe("scheduled_scrapes", () => {
         const auth = await insertAuthUser(client);
         await asClaims(client, { sub: auth.id });
         const profileId = await insertProfile(client, auth.id);
+        const groupId = await insertGroup(client, profileId, auth.id);
 
         await client.query(
           `insert into public.scheduled_scrapes (
-             ig_profile_id, started_by, group_id, scrape_type, apify_run_id
+             group_id, scrape_type, apify_run_id
            )
-           values ($1, $2, $3, $4, $5)`,
-          [profileId, auth.id, crypto.randomUUID(), "posts", "sxfSOvMdx4kXZjQ0r"],
+           values ($1, $2, $3)`,
+          [groupId, "posts", "sxfSOvMdx4kXZjQ0r"],
         );
 
         await expect(
           client.query(
             `insert into public.scheduled_scrapes (
-               ig_profile_id, started_by, group_id, scrape_type, apify_run_id
+               group_id, scrape_type, apify_run_id
              )
-             values ($1, $2, $3, $4, $5)`,
-            [profileId, auth.id, crypto.randomUUID(), "reels", "sxfSOvMdx4kXZjQ0r"],
+             values ($1, $2, $3)`,
+            [groupId, "reels", "sxfSOvMdx4kXZjQ0r"],
           ),
         ).rejects.toThrow(/scheduled_scrapes_apify_run_id_key/);
+      });
+    });
+
+    it("rejects a scrape without a matching group", async () => {
+      await withRollback(async (client) => {
+        const auth = await insertAuthUser(client);
+        await asClaims(client, { sub: auth.id });
+
+        await expect(
+          client.query(
+            `insert into public.scheduled_scrapes (group_id, scrape_type)
+             values ($1, $2)`,
+            [crypto.randomUUID(), "posts"],
+          ),
+        ).rejects.toThrow(/scheduled_scrapes_group_id_fkey|row-level security/);
       });
     });
   });
@@ -196,6 +267,21 @@ async function insertProfile(
      values ($1, $2)
      returning id`,
     ["example", authId],
+  );
+
+  return rows[0].id as string;
+}
+
+async function insertGroup(
+  client: Parameters<Parameters<typeof withRollback>[0]>[0],
+  profileId: string,
+  authId: string,
+): Promise<string> {
+  const { rows } = await client.query(
+    `insert into public.groups (ig_profile_id, created_by)
+     values ($1, $2)
+     returning id`,
+    [profileId, authId],
   );
 
   return rows[0].id as string;

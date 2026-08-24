@@ -3,7 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { scheduleIgScrape } from "@/lib/ig/schedule-scrape";
 
 const JOB = {
-  groupId: "e1000000-0000-4000-8000-000000000003",
+  group: {
+    created_at: "2026-08-20T10:00:00.000Z",
+    created_by: "e1000000-0000-4000-8000-000000000002",
+    id: "e1000000-0000-4000-8000-000000000003",
+    ig_profile_id: "e1000000-0000-4000-8000-000000000001",
+    requested_post_count: 12,
+    since_when: null,
+  },
   profile: {
     created_at: "2026-08-20T10:00:00.000Z",
     created_by: "e1000000-0000-4000-8000-000000000002",

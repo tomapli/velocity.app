@@ -19,6 +19,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import type { Tables } from "@/lib/supabase/tables";
 
 type AppSupabase = SupabaseClient<Database>;
+type Group = Tables<"groups">;
 type ScheduledScrape = Tables<"scheduled_scrapes">;
 
 export interface ListingRunInput {
@@ -57,13 +58,22 @@ export async function startDetailsBatchForGroup(
   token: string,
   groupId: string,
 ): Promise<ScheduledScrape | null> {
-  const { data: groupScrapes, error: groupError } = await supabase
+  const [
+    { data: group, error: groupError },
+    { data: groupScrapes, error: scrapesError },
+  ] = await Promise.all([
+    supabase.from("groups").select("*").eq("id", groupId).single(),
+    supabase
     .from("scheduled_scrapes")
     .select("*")
-    .eq("group_id", groupId);
+      .eq("group_id", groupId),
+  ]);
 
   if (groupError) {
     throw groupError;
+  }
+  if (scrapesError) {
+    throw scrapesError;
   }
 
   if (hasInFlightDetailsScrape(groupScrapes ?? [])) {
@@ -79,10 +89,10 @@ export async function startDetailsBatchForGroup(
 
   const template = listingScrapes[0];
   const listingIds = listingScrapes.map((scrape) => scrape.id);
-  const remainingSlots = getRemainingDetailSlots(template, await countDetailedPosts(
-    supabase,
-    listingIds,
-  ));
+  const remainingSlots = getRemainingDetailSlots(
+    group,
+    await countDetailedPosts(supabase, listingIds),
+  );
   if (remainingSlots <= 0) {
     return null;
   }
@@ -90,7 +100,7 @@ export async function startDetailsBatchForGroup(
   const pending = await listPendingPostUrls(
     supabase,
     listingIds,
-    template.since_when,
+    group.since_when,
     Math.min(APIFY_DETAILS_BATCH_SIZE, remainingSlots),
   );
   if (pending.length === 0) {
@@ -100,12 +110,8 @@ export async function startDetailsBatchForGroup(
   const { data: detailsScrape, error: insertError } = await supabase
     .from("scheduled_scrapes")
     .insert({
-      ig_profile_id: template.ig_profile_id,
-      started_by: template.started_by,
       group_id: groupId,
       scrape_type: "post_details",
-      requested_post_count: template.requested_post_count,
-      since_when: template.since_when,
     })
     .select("*")
     .single();
@@ -245,14 +251,14 @@ async function listPendingPostUrls(
 }
 
 function getRemainingDetailSlots(
-  template: ScheduledScrape,
+  group: Group,
   detailedPostCount: number,
 ): number {
-  if (template.requested_post_count == null) {
+  if (group.requested_post_count == null) {
     return APIFY_DETAILS_BATCH_SIZE;
   }
 
-  return Math.max(0, template.requested_post_count - detailedPostCount);
+  return Math.max(0, group.requested_post_count - detailedPostCount);
 }
 
 function countUniqueShortcodes(postUrls: string[]): number {

@@ -17,13 +17,15 @@ import {
   type PendingIgScrape,
 } from "@/lib/ig/pending-scrapes";
 import {
-  groupScheduledScrapes,
+  buildIgScrapeJobs,
+  upsertGroup,
   upsertScheduledScrape,
   type IgScrapeJob,
 } from "@/lib/ig/groups";
 import { instagramProfileUrl } from "@/lib/ig/parse-input";
 import {
   getIgProfileByUsername,
+  type Group,
   type IgProfile,
   type ScheduledScrape,
 } from "@/lib/ig/queries";
@@ -41,6 +43,9 @@ interface IgSearchHomeProps {
  */
 export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
   const router = useRouter();
+  const [groups, setGroups] = useState<Group[]>(() =>
+    initialJobs.map((job) => job.group),
+  );
   const [profiles, setProfiles] = useState<IgProfile[]>(() =>
     initialJobs.map((job) => job.profile),
   );
@@ -54,11 +59,12 @@ export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
 
   const jobs = useMemo(
     () =>
-      groupScheduledScrapes(
+      buildIgScrapeJobs(
+        groups,
         scrapes,
         new Map(profiles.map((profile) => [profile.id, profile])),
       ),
-    [profiles, scrapes],
+    [groups, profiles, scrapes],
   );
 
   const upsertProfile = useCallback((profile: IgProfile) => {
@@ -69,11 +75,20 @@ export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
     setScrapes((current) => upsertScheduledScrape(current, scrape));
   }, []);
 
+  const upsertNextGroup = useCallback((group: Group) => {
+    setGroups((current) => upsertGroup(current, group));
+  }, []);
+
   useIgScrapesRealtime({
     onScrapeInsert: upsertScrape,
     onScrapeUpdate: upsertScrape,
     onScrapeDelete: (scrape) => {
       setScrapes((current) => current.filter((row) => row.id !== scrape.id));
+    },
+    onGroupInsert: upsertNextGroup,
+    onGroupUpdate: upsertNextGroup,
+    onGroupDelete: (group) => {
+      setGroups((current) => current.filter((row) => row.id !== group.id));
     },
     onProfileInsert: upsertProfile,
     onProfileUpdate: upsertProfile,
@@ -152,6 +167,7 @@ export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
       });
 
       upsertProfile(job.profile);
+      upsertNextGroup(job.group);
       setScrapes((current) =>
         job.scrapes.reduce(upsertScheduledScrape, current),
       );

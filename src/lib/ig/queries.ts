@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { groupScheduledScrapes, type IgScrapeJob } from "@/lib/ig/groups";
+import { buildIgScrapeJobs, type IgScrapeJob } from "@/lib/ig/groups";
+import { deduplicateIgPostsByShortcode } from "@/lib/ig/post-identity";
 import type { Database } from "@/lib/supabase/database.types";
 import { throwQueryError } from "@/lib/supabase/throw-query-error";
 import type { Tables } from "@/lib/supabase/tables";
 
 export type IgProfile = Tables<"ig_profiles">;
+export type Group = Tables<"groups">;
 export type ScheduledScrape = Tables<"scheduled_scrapes">;
 export type IgPost = Tables<"ig_posts">;
 
@@ -17,20 +19,26 @@ export interface ScheduleIgScrapeParams {
 }
 
 /**
- * Loads every scheduled scrape with its profile, grouped into jobs.
+ * Loads group rows for scrape history with their profiles and scheduled runs.
  */
 export async function listIgScrapeJobs(
   supabase: SupabaseClient<Database>,
 ): Promise<IgScrapeJob[]> {
-  const [{ data: scrapes, error: scrapesError }, { data: profiles, error: profilesError }] =
-    await Promise.all([
+  const [
+    { data: groups, error: groupsError },
+    { data: scrapes, error: scrapesError },
+    { data: profiles, error: profilesError },
+  ] = await Promise.all([
+      supabase.from("groups").select("*").order("created_at", { ascending: false }),
       supabase
         .from("scheduled_scrapes")
-        .select("*")
-        .order("created_at", { ascending: false }),
+        .select("*"),
       supabase.from("ig_profiles").select("*"),
     ]);
 
+  if (groupsError) {
+    return throwQueryError(groupsError);
+  }
   if (scrapesError) {
     return throwQueryError(scrapesError);
   }
@@ -38,7 +46,8 @@ export async function listIgScrapeJobs(
     return throwQueryError(profilesError);
   }
 
-  return groupScheduledScrapes(
+  return buildIgScrapeJobs(
+    groups ?? [],
     scrapes ?? [],
     new Map((profiles ?? []).map((profile) => [profile.id, profile])),
   );
@@ -76,17 +85,35 @@ export async function getLatestIgScrapeJobForUsername(
     return null;
   }
 
-  const { data, error } = await supabase
-    .from("scheduled_scrapes")
+  const { data: group, error: groupError } = await supabase
+    .from("groups")
     .select("*")
     .eq("ig_profile_id", profile.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  if (error) {
-    return throwQueryError(error);
+  if (groupError) {
+    return throwQueryError(groupError);
+  }
+  if (!group) {
+    return null;
   }
 
-  return groupScheduledScrapes(data ?? [], new Map([[profile.id, profile]]))[0] ?? null;
+  const { data: scrapes, error: scrapesError } = await supabase
+    .from("scheduled_scrapes")
+    .select("*")
+    .eq("group_id", group.id);
+
+  if (scrapesError) {
+    return throwQueryError(scrapesError);
+  }
+
+  return buildIgScrapeJobs(
+    [group],
+    scrapes ?? [],
+    new Map([[profile.id, profile]]),
+  )[0] ?? null;
 }
 
 /**
@@ -107,7 +134,7 @@ export async function listIgPostsForProfile(
     return throwQueryError(error);
   }
 
-  return data ?? [];
+  return deduplicateIgPostsByShortcode(data ?? []);
 }
 
 /**

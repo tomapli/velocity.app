@@ -63,7 +63,7 @@ export function ScrapeHistory({ jobs }: ScrapeHistoryProps) {
     <ul className="divide-y rounded-xl border">
       {jobs.map((job) => (
         <li
-          key={job.groupId}
+          key={job.group.id}
           className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
         >
           <div className="min-w-0 space-y-1">

@@ -16,13 +16,17 @@ async function insertSourceScrape(
      returning id`,
     ["example", authId],
   );
-  const scrape = await client.query(
-    `insert into public.scheduled_scrapes (
-       ig_profile_id, started_by, group_id, scrape_type
-     )
-     values ($1, $2, $3, $4)
+  const group = await client.query(
+    `insert into public.groups (ig_profile_id, created_by)
+     values ($1, $2)
      returning id`,
-    [profile.rows[0].id, authId, crypto.randomUUID(), "posts"],
+    [profile.rows[0].id, authId],
+  );
+  const scrape = await client.query(
+    `insert into public.scheduled_scrapes (group_id, scrape_type)
+     values ($1, $2)
+     returning id`,
+    [group.rows[0].id, "posts"],
   );
 
   return {

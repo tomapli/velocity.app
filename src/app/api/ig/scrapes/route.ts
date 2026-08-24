@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { buildIgScrapeJobs } from "@/lib/ig/groups";
 import { startListingRun } from "@/lib/ig/start-runs";
-import { groupScheduledScrapes } from "@/lib/ig/groups";
 import { upsertIgProfile } from "@/lib/ig/queries";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -39,33 +40,39 @@ export async function POST(request: Request) {
     igUsername: parsedBody.data.igUsername,
     createdBy: user.id,
   });
-  const groupId = crypto.randomUUID();
   const requestedPostCount = parsedBody.data.requestedPostCount ?? null;
   const sinceWhen = parsedBody.data.sinceWhen ?? null;
+  const { data: group, error: groupError } = await supabase
+    .from("groups")
+    .insert({
+      ig_profile_id: profile.id,
+      created_by: user.id,
+      requested_post_count: requestedPostCount,
+      since_when: sinceWhen,
+    })
+    .select("*")
+    .single();
+
+  if (groupError) {
+    return NextResponse.json({ error: groupError.message }, { status: 500 });
+  }
 
   const { data: scrapes, error: insertError } = await supabase
     .from("scheduled_scrapes")
     .insert([
       {
-        ig_profile_id: profile.id,
-        started_by: user.id,
-        group_id: groupId,
+        group_id: group.id,
         scrape_type: "posts",
-        requested_post_count: requestedPostCount,
-        since_when: sinceWhen,
       },
       {
-        ig_profile_id: profile.id,
-        started_by: user.id,
-        group_id: groupId,
+        group_id: group.id,
         scrape_type: "reels",
-        requested_post_count: requestedPostCount,
-        since_when: sinceWhen,
       },
     ])
     .select("*");
 
   if (insertError || !scrapes) {
+    await createAdminClient().from("groups").delete().eq("id", group.id);
     return NextResponse.json(
       { error: insertError?.message ?? "Could not schedule scrape" },
       { status: 500 },
@@ -99,16 +106,20 @@ export async function POST(request: Request) {
       }),
     );
 
-    const job = groupScheduledScrapes(started, new Map([[profile.id, profile]]))[0];
-    return NextResponse.json({ job, profile, scrapes: started }, { status: 201 });
+    const job = buildIgScrapeJobs(
+      [group],
+      started,
+      new Map([[profile.id, profile]]),
+    )[0];
+    return NextResponse.json({ job }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not start Apify";
     await supabase
       .from("scheduled_scrapes")
       .update({ error_message: message, finished_at: new Date().toISOString() })
-      .eq("group_id", groupId)
+      .eq("group_id", group.id)
       .is("apify_run_id", null);
 
-    return NextResponse.json({ error: message, groupId }, { status: 502 });
+    return NextResponse.json({ error: message, groupId: group.id }, { status: 502 });
   }
 }
