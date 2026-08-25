@@ -19,6 +19,11 @@ import {
   shouldContinueDetails,
   startDetailsBatchForGroup,
 } from "@/lib/ig/start-runs";
+import {
+  IG_DATA_SOURCE,
+  mergeIgPostValues,
+  mergeIgProfileValues,
+} from "@/lib/ig/source-precedence";
 import type { Database } from "@/lib/supabase/database.types";
 import type { Tables } from "@/lib/supabase/tables";
 import type { Updatable } from "@/lib/supabase/tables";
@@ -194,27 +199,12 @@ async function importListing(
   );
   const mergedPending = uniquePending.map((post) => {
     const existing = existingByUrl.get(post.post_url);
-    if (group.data_source !== "meta_hybrid") {
-      return {
-        ...post,
-        meta_media_id: null,
-        follows_count: null,
-        follower_view_count: null,
-        non_follower_view_count: null,
-        follower_non_follower_ratio: null,
-        reach_count: null,
-        hook_rate: null,
-        average_watch_time_ms: null,
-        hold_rate: null,
-      };
-    }
-    if (!existing?.meta_media_id) {
+    if (!existing) {
       return post;
     }
     return {
       ...post,
-      uploaded_at: existing.uploaded_at ?? post.uploaded_at,
-      thumbnail_url: existing.thumbnail_url ?? post.thumbnail_url,
+      ...mergeIgPostValues(existing, post, IG_DATA_SOURCE.APIFY),
     };
   });
 
@@ -255,9 +245,7 @@ async function importListing(
     const { error } = await admin
       .from("ig_profiles")
       .update(
-        group.data_source === "meta_hybrid"
-          ? mergeProfileUpdate(profile, profileUpdate)
-          : profileUpdate,
+        mergeApifyProfileUpdate(profile, profileUpdate, group.data_source),
       )
       .eq("id", profile.id);
     if (error) {
@@ -319,10 +307,7 @@ async function importDetails(
     }
 
     for (const post of postIds) {
-      const mergedUpdate =
-        group.data_source === "meta_hybrid" && post.meta_media_id
-          ? mergeApifyDetails(post, detailsUpdate)
-          : detailsUpdate;
+      const mergedUpdate = mergeApifyDetails(post, detailsUpdate);
       const { error } = await admin
         .from("ig_posts")
         .update({
@@ -345,9 +330,7 @@ async function importDetails(
     const { error } = await admin
       .from("ig_profiles")
       .update(
-        group.data_source === "meta_hybrid"
-          ? mergeProfileUpdate(profile, profileUpdate)
-          : profileUpdate,
+        mergeApifyProfileUpdate(profile, profileUpdate, group.data_source),
       )
       .eq("id", profile.id);
     if (error) {
@@ -480,42 +463,39 @@ function mergeApifyDetails(
   existing: IgPostRow,
   update: Updatable<"ig_posts">,
 ): Updatable<"ig_posts"> {
-  const videoLengthSecs = existing.video_length_secs ?? update.video_length_secs ?? null;
-  const averageWatchTimeMs = existing.average_watch_time_ms;
-  return {
-    uploaded_at: existing.uploaded_at ?? update.uploaded_at,
-    thumbnail_url: existing.thumbnail_url ?? update.thumbnail_url,
-    first_frame_url: existing.first_frame_url ?? update.first_frame_url,
-    video_embed_url: existing.video_embed_url ?? update.video_embed_url,
-    media_type: existing.media_type ?? update.media_type,
-    carousel_image_urls: existing.carousel_image_urls ?? update.carousel_image_urls,
-    video_length_secs: videoLengthSecs,
-    view_count: existing.view_count ?? update.view_count,
-    save_count: existing.save_count ?? update.save_count,
-    share_count: existing.share_count ?? update.share_count,
-    comment_count: existing.comment_count ?? update.comment_count,
-    like_count: existing.like_count ?? update.like_count,
-    description: existing.description ?? update.description,
-    hold_rate:
-      existing.hold_rate ??
-      (averageWatchTimeMs != null && videoLengthSecs != null && videoLengthSecs > 0
-        ? (averageWatchTimeMs / (videoLengthSecs * MILLISECONDS_PER_SECOND)) *
-          PERCENT_MAX
-        : null),
-  };
+  const initiallyMerged = mergeIgPostValues(
+    existing,
+    update,
+    IG_DATA_SOURCE.APIFY,
+  );
+  const videoLengthSecs = initiallyMerged.video_length_secs;
+  const averageWatchTimeMs = initiallyMerged.average_watch_time_ms;
+  const computedHoldRate =
+    averageWatchTimeMs != null && videoLengthSecs != null && videoLengthSecs > 0
+      ? (averageWatchTimeMs / (videoLengthSecs * MILLISECONDS_PER_SECOND)) *
+        PERCENT_MAX
+      : null;
+
+  return mergeIgPostValues(
+    existing,
+    { ...update, hold_rate: computedHoldRate },
+    IG_DATA_SOURCE.APIFY,
+  );
 }
 
-function mergeProfileUpdate(
+function mergeApifyProfileUpdate(
   existing: IgProfile,
   update: Updatable<"ig_profiles">,
+  dataSource: Group["data_source"],
 ): Updatable<"ig_profiles"> {
-  return {
-    profile_picture_url:
-      existing.profile_picture_url ?? update.profile_picture_url,
-    ig_name: existing.ig_name ?? update.ig_name,
-    description: existing.description ?? update.description,
-    post_count: existing.post_count ?? update.post_count,
-  };
+  return mergeIgProfileValues(
+    existing,
+    update,
+    dataSource === "meta_hybrid"
+      ? IG_DATA_SOURCE.META_API
+      : IG_DATA_SOURCE.APIFY,
+    IG_DATA_SOURCE.APIFY,
+  );
 }
 
 async function finishScrape(admin: AdminClient, scrapeId: string): Promise<void> {

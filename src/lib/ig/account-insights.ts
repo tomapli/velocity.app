@@ -1,10 +1,13 @@
 import {
-  META_ACCOUNT_INSIGHT_METRICS,
-  type MetaAccountInsightMetric,
+  META_ACCOUNT_INSIGHT_SUMMARY_METRICS,
+  type MetaAccountInsightSummaryMetric,
 } from "@/lib/meta/constants";
 import type { Json } from "@/lib/supabase/database.types";
 
-export const META_ACCOUNT_INSIGHT_LABELS: Record<MetaAccountInsightMetric, string> = {
+export const META_ACCOUNT_INSIGHT_LABELS: Record<
+  MetaAccountInsightSummaryMetric,
+  string
+> = {
   follower_count: "Followers",
   views: "Views",
   reach: "Reach",
@@ -17,14 +20,9 @@ export const META_ACCOUNT_INSIGHT_LABELS: Record<MetaAccountInsightMetric, strin
   replies: "Replies",
   reposts: "Reposts",
   follows_and_unfollows: "Follows and unfollows",
-  profile_views: "Profile views",
   profile_links_taps: "Profile link taps",
-  website_clicks: "Website clicks",
-  online_followers: "Online followers",
   follower_demographics: "Follower demographics",
-  reached_audience_demographics: "Reached audience demographics",
   engaged_audience_demographics: "Engaged audience demographics",
-  content_views: "Content views",
 };
 
 export interface AccountInsightPoint {
@@ -33,7 +31,7 @@ export interface AccountInsightPoint {
 }
 
 export interface AccountInsightSummary {
-  metric: MetaAccountInsightMetric;
+  metric: MetaAccountInsightSummaryMetric;
   label: string;
   displayValue: string;
   numericValue: number | null;
@@ -47,7 +45,7 @@ const NUMBER_FORMATTER = new Intl.NumberFormat("en", {
 
 export function summarizeAccountInsights(metrics: Json): AccountInsightSummary[] {
   const record = isRecord(metrics) ? metrics : {};
-  return META_ACCOUNT_INSIGHT_METRICS.map((metric) => {
+  return META_ACCOUNT_INSIGHT_SUMMARY_METRICS.map((metric) => {
     const raw = record[metric];
     const points = extractPoints(raw);
     const latest = points.at(-1)?.value ?? extractFirstNumber(raw);

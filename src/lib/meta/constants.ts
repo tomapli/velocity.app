@@ -20,7 +20,6 @@ export const META_INSTAGRAM_SCOPES = [
 ] as const;
 
 export const META_ACCOUNT_INSIGHT_METRICS = [
-  "follower_count",
   "views",
   "reach",
   "accounts_engaged",
@@ -32,18 +31,23 @@ export const META_ACCOUNT_INSIGHT_METRICS = [
   "replies",
   "reposts",
   "follows_and_unfollows",
-  "profile_views",
   "profile_links_taps",
-  "website_clicks",
-  "online_followers",
   "follower_demographics",
-  "reached_audience_demographics",
   "engaged_audience_demographics",
-  "content_views",
 ] as const;
 
 export type MetaAccountInsightMetric =
   (typeof META_ACCOUNT_INSIGHT_METRICS)[number];
+
+export const META_ACCOUNT_INSIGHT_SUMMARY_METRICS = [
+  "follower_count",
+  ...META_ACCOUNT_INSIGHT_METRICS,
+] as const;
+
+export type MetaAccountInsightSummaryMetric =
+  (typeof META_ACCOUNT_INSIGHT_SUMMARY_METRICS)[number];
+
+export const META_PROFILE_SNAPSHOT_KEY = "profile_snapshot";
 
 export const META_MEDIA_INSIGHT_METRICS = [
   "views",
@@ -68,4 +72,3 @@ export const META_REEL_INSIGHT_METRICS = [
   "clips_replays_count",
   "reels_skip_rate",
 ] as const;
-

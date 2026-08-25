@@ -53,7 +53,11 @@ export async function processMetaScrapeStep(
     return processMediaStep(admin, loaded);
   }
   if (loaded.state.phase === "profile") {
-    await importMetaProfile(loaded.context);
+    await importMetaProfile({
+      ...loaded.context,
+      periodStart: loaded.state.period_start,
+      periodEnd: loaded.state.period_end,
+    });
     const state = clearRetryState({
       ...loaded.state,
       phase: "account_insights",

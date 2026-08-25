@@ -36,11 +36,14 @@ const FacebookIdentitySchema = z.object({
 });
 
 const InstagramIdentitySchema = z.object({
+  biography: z.string().nullable().optional(),
+  follows_count: z.number().int().nonnegative().nullable().optional(),
   id: z.union([z.string(), z.number()]).optional(),
   user_id: z.union([z.string(), z.number()]).optional(),
   username: z.string(),
   name: z.string().nullable().optional(),
   profile_picture_url: z.string().url().nullable().optional(),
+  website: z.string().nullable().optional(),
   followers_count: z.number().int().nonnegative().nullable().optional(),
   media_count: z.number().int().nonnegative().nullable().optional(),
 });
@@ -135,11 +138,15 @@ export interface MetaIdentity {
 }
 
 export interface MetaInstagramProfile {
+  biography: string | null;
   followerCount: number | null;
+  followsCount: number | null;
+  igUserId: string;
   mediaCount: number | null;
   name: string | null;
   profilePictureUrl: string | null;
   username: string;
+  website: string | null;
 }
 
 export interface MetaMediaPage {
@@ -403,11 +410,15 @@ export async function getMetaInstagramProfile(params: {
   );
   const profile = InstagramIdentitySchema.parse(raw);
   return {
+    biography: profile.biography ?? null,
     followerCount: profile.followers_count ?? null,
+    followsCount: profile.follows_count ?? null,
+    igUserId: String(profile.user_id ?? profile.id ?? params.igUserId),
     mediaCount: profile.media_count ?? null,
     name: profile.name ?? null,
     profilePictureUrl: profile.profile_picture_url ?? null,
     username: profile.username,
+    website: profile.website ?? null,
   };
 }
 

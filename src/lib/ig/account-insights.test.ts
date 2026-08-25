@@ -19,15 +19,15 @@ describe("summarizeAccountInsights", () => {
       ],
     });
 
-    expect(summaries).toHaveLength(20);
+    expect(summaries).toHaveLength(15);
     expect(summaries.find((summary) => summary.metric === "views")).toMatchObject({
       displayValue: "180",
       numericValue: 180,
       points: [{ timestamp: "2026-08-23T00:00:00Z", value: 120 }, { timestamp: "2026-08-24T00:00:00Z", value: 180 }],
     });
     expect(
-      summaries.find((summary) => summary.metric === "profile_views")?.displayValue,
+      summaries.find((summary) => summary.metric === "profile_links_taps")
+        ?.displayValue,
     ).toBe("Not provided");
   });
 });
-

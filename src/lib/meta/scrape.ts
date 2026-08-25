@@ -13,13 +13,22 @@ import {
 import {
   META_FETCH_CONCURRENCY,
   META_MEDIA_INSIGHT_METRICS,
+  META_PROFILE_SNAPSHOT_KEY,
   META_REEL_INSIGHT_METRICS,
   type MetaAccountInsightMetric,
 } from "@/lib/meta/constants";
 import type { ResolvedMetaAccountAccess } from "@/lib/meta/connections";
-import { getMissingInsightMetrics } from "@/lib/meta/insights";
+import {
+  getMetaAccountInsightRequests,
+  getMissingInsightMetrics,
+} from "@/lib/meta/insights";
+import {
+  IG_DATA_SOURCE,
+  mergeIgPostValues,
+  mergeIgProfileValues,
+} from "@/lib/ig/source-precedence";
 import type { Database, Json } from "@/lib/supabase/database.types";
-import type { Insertable, Tables } from "@/lib/supabase/tables";
+import type { Insertable, Tables, Updatable } from "@/lib/supabase/tables";
 
 const REELS_PRODUCT_TYPE = "REELS";
 const MEDIA_TYPE_CAROUSEL = "CAROUSEL_ALBUM";
@@ -89,7 +98,14 @@ export async function importMetaMediaBatch(
       existingByMetaId.get(item.media.id) ?? existingByUrl.get(mapped.post_url);
 
     const query = existingPost
-      ? params.admin.from("ig_posts").update(mapped).eq("id", existingPost.id)
+      ? params.admin
+          .from("ig_posts")
+          .update({
+            ...mapped,
+            details_scrape_id: existingPost.details_scrape_id,
+            ...mergeMetaPostValues(existingPost, mapped),
+          })
+          .eq("id", existingPost.id)
       : params.admin.from("ig_posts").insert(mapped);
     const { error } = await query;
     if (error) {
@@ -99,27 +115,64 @@ export async function importMetaMediaBatch(
 }
 
 /** Refreshes profile metadata as its own short queue step. */
-export async function importMetaProfile(params: MetaScrapeContext): Promise<void> {
+export async function importMetaProfile(
+  params: MetaScrapeContext & {
+    periodStart: string;
+    periodEnd: string;
+  },
+): Promise<void> {
   const metaProfile = await getMetaInstagramProfile({
     provider: params.access.connection.provider,
     igUserId: params.access.account.ig_user_id,
     token: params.access.token,
   });
   const now = new Date().toISOString();
-  const { error } = await params.admin
+  const { data: existing, error: existingError } = await params.admin
     .from("ig_profiles")
-    .update({
+    .select("*")
+    .eq("id", params.profileId)
+    .single();
+  if (existingError) {
+    throw existingError;
+  }
+  const profileUpdate = mergeIgProfileValues(
+    existing,
+    {
+      description: metaProfile.biography,
       ig_name: metaProfile.name ?? params.access.account.name,
       profile_picture_url:
         metaProfile.profilePictureUrl ?? params.access.account.profile_picture_url,
       post_count: metaProfile.mediaCount,
       follower_count: metaProfile.followerCount,
+    },
+    IG_DATA_SOURCE.APIFY,
+    IG_DATA_SOURCE.META_API,
+  );
+  const { error } = await params.admin
+    .from("ig_profiles")
+    .update({
+      ...profileUpdate,
       updated_at: now,
     })
     .eq("id", params.profileId);
   if (error) {
     throw error;
   }
+
+  await upsertMetaAccountInsightValues(params, {
+    follower_count: metaProfile.followerCount,
+    [META_PROFILE_SNAPSHOT_KEY]: toJson({
+      biography: metaProfile.biography,
+      followers_count: metaProfile.followerCount,
+      follows_count: metaProfile.followsCount,
+      id: metaProfile.igUserId,
+      media_count: metaProfile.mediaCount,
+      name: metaProfile.name,
+      profile_picture_url: metaProfile.profilePictureUrl,
+      username: metaProfile.username,
+      website: metaProfile.website,
+    }),
+  });
 }
 
 /** Fetches and persists one account metric without keeping a function alive. */
@@ -142,31 +195,9 @@ export async function importMetaAccountInsightMetric(
     },
     params.metric,
   );
-  const { data: existing, error: existingError } = await params.admin
-    .from("ig_account_insights")
-    .select("metrics")
-    .eq("group_id", params.groupId)
-    .maybeSingle();
-  if (existingError) {
-    throw existingError;
-  }
-  const metrics = isRecord(existing?.metrics) ? existing.metrics : {};
-  const { error } = await params.admin
-    .from("ig_account_insights")
-    .upsert(
-      {
-        ig_profile_id: params.profileId,
-        group_id: params.groupId,
-        period_start: params.periodStart,
-        period_end: params.periodEnd,
-        metrics: toJson({ ...metrics, [params.metric]: metricValue }),
-        captured_at: params.periodEnd,
-      },
-      { onConflict: "group_id" },
-    );
-  if (error) {
-    throw error;
-  }
+  await upsertMetaAccountInsightValues(params, {
+    [params.metric]: metricValue,
+  });
 }
 
 async function getMediaInsights(
@@ -249,90 +280,21 @@ async function getMetaAccountInsightMetric(
   },
   metric: MetaAccountInsightMetric,
 ): Promise<Json> {
-  if (metric.endsWith("_demographics")) {
-    const breakdowns = ["age", "gender", "city", "country"] as const;
-    const entries = await Promise.all(
-      breakdowns.map(async (breakdown) => {
-        try {
-          const insights = await getMetaInsights({
-            provider: params.provider,
-            objectId: params.igUserId,
-            token: params.token,
-            metrics: [metric],
-            query: {
-              period: "lifetime",
-              metric_type: "total_value",
-              timeframe: "last_90_days",
-              breakdown,
-            },
-          });
-          return [breakdown, toJson(insights)] as const;
-        } catch (error) {
-          if (isExpectedUnavailableInsight(error)) {
-            return [breakdown, []] as const;
-          }
-          throw error;
-        }
-      }),
-    );
-    return Object.fromEntries(entries);
-  }
-
-  if (metric === "views" || metric === "reach") {
-    const baseQuery = getAccountMetricQuery(metric, params.since, params.until);
-    const [timeseries, followerBreakdown, mediaTypeBreakdown] = await Promise.all([
-      getOptionalAccountInsight(params, metric, baseQuery),
-      getOptionalAccountInsight(params, metric, {
-        period: "lifetime",
-        metric_type: "total_value",
-        timeframe: "last_90_days",
-        breakdown: "follow_type",
-      }),
-      getOptionalAccountInsight(params, metric, {
-        period: "lifetime",
-        metric_type: "total_value",
-        timeframe: "last_90_days",
-        breakdown: "media_product_type",
-      }),
-    ]);
-    return {
-      timeseries,
-      follower_breakdown: followerBreakdown,
-      media_type_breakdown: mediaTypeBreakdown,
-    };
-  }
-
-  const query = getAccountMetricQuery(metric, params.since, params.until);
-  try {
-    const insights = await getMetaInsights({
-      provider: params.provider,
-      objectId: params.igUserId,
-      token: params.token,
-      metrics: [metric],
-      query,
-    });
-    return toJson(insights);
-  } catch (error) {
-    if (!isExpectedUnavailableInsight(error)) {
-      throw error;
-    }
-  }
-
-  try {
-    const insights = await getMetaInsights({
-      provider: params.provider,
-      objectId: params.igUserId,
-      token: params.token,
-      metrics: [metric],
-      query: { ...query, metric_type: "total_value" },
-    });
-    return toJson(insights);
-  } catch (error) {
-    if (isExpectedUnavailableInsight(error)) {
-      return [];
-    }
-    throw error;
-  }
+  const requests = getMetaAccountInsightRequests(
+    metric,
+    params.since,
+    params.until,
+  );
+  const entries = await mapWithConcurrency(
+    requests,
+    META_FETCH_CONCURRENCY,
+    async (request) =>
+      [
+        request.key,
+        await getOptionalAccountInsight(params, metric, request.query),
+      ] as const,
+  );
+  return Object.fromEntries(entries);
 }
 
 async function getOptionalAccountInsight(
@@ -342,7 +304,7 @@ async function getOptionalAccountInsight(
     token: string;
   },
   metric: MetaAccountInsightMetric,
-  query: Record<string, string>,
+  query: Readonly<Record<string, string>>,
 ): Promise<Json> {
   try {
     return toJson(
@@ -362,19 +324,36 @@ async function getOptionalAccountInsight(
   }
 }
 
-function getAccountMetricQuery(
-  metric: MetaAccountInsightMetric,
-  since: number,
-  until: number,
-): Record<string, string> {
-  if (metric === "online_followers") {
-    return { period: "lifetime" };
+async function upsertMetaAccountInsightValues(
+  params: MetaScrapeContext & {
+    periodStart: string;
+    periodEnd: string;
+  },
+  values: Readonly<Record<string, Json>>,
+): Promise<void> {
+  const { data: existing, error: existingError } = await params.admin
+    .from("ig_account_insights")
+    .select("metrics")
+    .eq("group_id", params.groupId)
+    .maybeSingle();
+  if (existingError) {
+    throw existingError;
   }
-  return {
-    period: "day",
-    since: String(since),
-    until: String(until),
-  };
+  const metrics = isRecord(existing?.metrics) ? existing.metrics : {};
+  const { error } = await params.admin.from("ig_account_insights").upsert(
+    {
+      ig_profile_id: params.profileId,
+      group_id: params.groupId,
+      period_start: params.periodStart,
+      period_end: params.periodEnd,
+      metrics: toJson({ ...metrics, ...values }),
+      captured_at: params.periodEnd,
+    },
+    { onConflict: "group_id" },
+  );
+  if (error) {
+    throw error;
+  }
 }
 
 function mapMetaMedia(
@@ -441,6 +420,31 @@ function mapMetaMedia(
           PERCENT_MAX
         : null,
   };
+}
+
+function mergeMetaPostValues(
+  existing: Tables<"ig_posts">,
+  incoming: Insertable<"ig_posts">,
+): Updatable<"ig_posts"> {
+  const initiallyMerged = mergeIgPostValues(
+    existing,
+    incoming,
+    IG_DATA_SOURCE.META_API,
+  );
+  const averageWatchTimeMs =
+    incoming.average_watch_time_ms ?? initiallyMerged.average_watch_time_ms;
+  const videoLengthSecs = initiallyMerged.video_length_secs;
+  const computedHoldRate =
+    averageWatchTimeMs != null && videoLengthSecs != null && videoLengthSecs > 0
+      ? (averageWatchTimeMs / (videoLengthSecs * MILLISECONDS_PER_SECOND)) *
+        PERCENT_MAX
+      : null;
+
+  return mergeIgPostValues(
+    existing,
+    { ...incoming, hold_rate: incoming.hold_rate ?? computedHoldRate },
+    IG_DATA_SOURCE.META_API,
+  );
 }
 
 function getFollowerViewBreakdown(insights: MetaInsight[]): {
