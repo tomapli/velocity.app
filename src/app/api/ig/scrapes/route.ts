@@ -111,10 +111,12 @@ export async function POST(request: Request) {
     {
       group_id: group.id,
       scrape_type: "posts",
+      state: {},
     },
     {
       group_id: group.id,
       scrape_type: "reels",
+      state: {},
     },
     ...(initialMetaState
       ? [
