@@ -1,8 +1,8 @@
 name: Supabase config
 
-# Pushes supabase/config.toml Auth settings (including allowlist hooks) to the
-# hosted project via `supabase config push`. Requires migrations already applied
-# so the Postgres hook functions exist.
+# Pushes pending migrations (`supabase db push`) then supabase/config.toml Auth
+# settings (including allowlist hooks) via `supabase config push`. Migrations
+# must apply first so the Postgres hook functions exist before config references them.
 #
 # Google OAuth credentials are decrypted from supabase/.env.production with
 # dotenvx (DOTENV_PRIVATE_KEY_PRODUCTION).
@@ -13,6 +13,7 @@ on:
       - main
     paths:
       - supabase/config.toml
+      - supabase/migrations/**
       - supabase/.env.production
       - .github/workflows/supabase-config.yml
   workflow_dispatch:
@@ -23,7 +24,7 @@ concurrency:
 
 jobs:
   push-config:
-    name: Push config
+    name: Push migrations and config
     runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -58,6 +59,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Push migrations
+        run: >
+          pnpm exec supabase db push
+          --project-ref "${SUPABASE_PRODUCTION_PROJECT_REF}"
+          --yes
 
       - name: Push config.toml
         # Private key comes from DOTENV_PRIVATE_KEY_PRODUCTION (file is gitignored).
