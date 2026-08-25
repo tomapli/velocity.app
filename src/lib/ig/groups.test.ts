@@ -42,6 +42,7 @@ const SCRAPE: ScheduledScrape = {
   group_id: GROUP.id,
   id: "e1000000-0000-4000-8000-000000000004",
   scrape_type: "posts",
+  state: {},
   updated_at: "2026-08-20T10:00:01.000Z",
 };
 
@@ -67,5 +68,22 @@ describe("buildIgScrapeJobs", () => {
     );
 
     expect(job?.scrapes).toEqual([SCRAPE]);
+  });
+
+  it("surfaces a failed Meta enrichment step", () => {
+    const job = {
+      group: GROUP,
+      profile: PROFILE,
+      scrapes: [
+        {
+          ...SCRAPE,
+          scrape_type: "meta" as const,
+          finished_at: "2026-08-20T10:01:00.000Z",
+          error_message: "Meta API unavailable",
+        },
+      ],
+    };
+
+    expect(getIgScrapeJobStatus(job)).toBe("error");
   });
 });

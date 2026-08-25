@@ -9,6 +9,8 @@ import {
   timestamp,
   index,
   unique,
+  jsonb,
+  check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -18,6 +20,7 @@ export const scheduledScrapeType = pgEnum("scheduled_scrape_type", [
   "posts",
   "reels",
   "post_details",
+  "meta",
 ]);
 
 export const scheduledScrapes = pgTable(
@@ -37,6 +40,7 @@ export const scheduledScrapes = pgTable(
       mode: "string",
     }),
     apifyRunId: text("apify_run_id"),
+    state: jsonb().default({}).notNull(),
     finishedAt: timestamp("finished_at", {
       withTimezone: true,
       mode: "string",
@@ -52,6 +56,10 @@ export const scheduledScrapes = pgTable(
   (table) => [
     index("scheduled_scrapes_group_id_idx").on(table.groupId),
     unique("scheduled_scrapes_apify_run_id_key").on(table.apifyRunId),
+    check(
+      "scheduled_scrapes_state_is_object",
+      sql`jsonb_typeof(${table.state}) = 'object'`,
+    ),
     foreignKey({
       columns: [table.groupId],
       foreignColumns: [groups.id],

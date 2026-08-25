@@ -6,14 +6,11 @@ import { getCanonicalInstagramPostUrl } from "@/lib/apify/instagram-listing";
 import {
   getMetaInsights,
   getMetaInstagramProfile,
-  listMetaMedia,
   MetaApiError,
   type MetaInsight,
   type MetaMedia,
 } from "@/lib/meta/api";
 import {
-  META_ACCOUNT_INSIGHT_METRICS,
-  META_ACCOUNT_INSIGHTS_DAYS,
   META_FETCH_CONCURRENCY,
   META_MEDIA_INSIGHT_METRICS,
   META_REEL_INSIGHT_METRICS,
@@ -34,33 +31,20 @@ const META_EXPECTED_INSIGHT_ERROR_STATUS = 400;
 type AdminClient = SupabaseClient<Database>;
 type ScheduledScrape = Tables<"scheduled_scrapes">;
 
-export interface ImportMetaScrapeParams {
+export interface MetaScrapeContext {
   admin: AdminClient;
   access: ResolvedMetaAccountAccess;
   groupId: string;
   profileId: string;
-  requestedPostCount: number | null;
-  sinceWhen: string | null;
   listingScrapes: ScheduledScrape[];
 }
 
-/** Imports private Meta media and the maximum available account-insight window. */
-export async function importMetaScrape(params: ImportMetaScrapeParams): Promise<void> {
+/** Imports one bounded media batch. Replaying a batch produces the same rows. */
+export async function importMetaMediaBatch(
+  params: MetaScrapeContext,
+  media: MetaMedia[],
+): Promise<void> {
   const provider = params.access.connection.provider;
-  const [media, metaProfile] = await Promise.all([
-    listMetaMedia({
-      provider,
-      igUserId: params.access.account.ig_user_id,
-      token: params.access.token,
-      requestedPostCount: params.requestedPostCount,
-      sinceWhen: params.sinceWhen,
-    }),
-    getMetaInstagramProfile({
-      provider,
-      igUserId: params.access.account.ig_user_id,
-      token: params.access.token,
-    }),
-  ]);
   const mediaWithInsights = await mapWithConcurrency(
     media,
     META_FETCH_CONCURRENCY,
@@ -77,7 +61,11 @@ export async function importMetaScrape(params: ImportMetaScrapeParams): Promise<
   const listingByType = new Map(
     params.listingScrapes.map((scrape) => [scrape.scrape_type, scrape]),
   );
-  const existing = await listExistingPosts(params.admin, params.profileId);
+  const existing = await listExistingPostsForMedia(
+    params.admin,
+    params.profileId,
+    media,
+  );
   const existingByMetaId = new Map(
     existing.flatMap((post) =>
       post.meta_media_id ? [[post.meta_media_id, post] as const] : [],
@@ -108,36 +96,17 @@ export async function importMetaScrape(params: ImportMetaScrapeParams): Promise<
       throw error;
     }
   }
+}
 
-  const periodEnd = new Date();
-  const periodStart = new Date(
-    periodEnd.getTime() - META_ACCOUNT_INSIGHTS_DAYS * 24 * 60 * 60 * 1_000,
-  );
-  const accountMetrics = await getAccountInsights({
-    provider,
+/** Refreshes profile metadata as its own short queue step. */
+export async function importMetaProfile(params: MetaScrapeContext): Promise<void> {
+  const metaProfile = await getMetaInstagramProfile({
+    provider: params.access.connection.provider,
     igUserId: params.access.account.ig_user_id,
     token: params.access.token,
-    since: Math.floor(periodStart.getTime() / 1_000),
-    until: Math.floor(periodEnd.getTime() / 1_000),
   });
-  const { error: insightError } = await params.admin
-    .from("ig_account_insights")
-    .upsert(
-      {
-        ig_profile_id: params.profileId,
-        group_id: params.groupId,
-        period_start: periodStart.toISOString(),
-        period_end: periodEnd.toISOString(),
-        metrics: accountMetrics,
-        captured_at: periodEnd.toISOString(),
-      },
-      { onConflict: "group_id" },
-    );
-  if (insightError) {
-    throw insightError;
-  }
-
-  const { error: profileError } = await params.admin
+  const now = new Date().toISOString();
+  const { error } = await params.admin
     .from("ig_profiles")
     .update({
       ig_name: metaProfile.name ?? params.access.account.name,
@@ -145,11 +114,58 @@ export async function importMetaScrape(params: ImportMetaScrapeParams): Promise<
         metaProfile.profilePictureUrl ?? params.access.account.profile_picture_url,
       post_count: metaProfile.mediaCount,
       follower_count: metaProfile.followerCount,
-      updated_at: periodEnd.toISOString(),
+      updated_at: now,
     })
     .eq("id", params.profileId);
-  if (profileError) {
-    throw profileError;
+  if (error) {
+    throw error;
+  }
+}
+
+/** Fetches and persists one account metric without keeping a function alive. */
+export async function importMetaAccountInsightMetric(
+  params: MetaScrapeContext & {
+    metric: MetaAccountInsightMetric;
+    periodStart: string;
+    periodEnd: string;
+  },
+): Promise<void> {
+  const metricValue = await getMetaAccountInsightMetric(
+    {
+      provider: params.access.connection.provider,
+      igUserId: params.access.account.ig_user_id,
+      token: params.access.token,
+      since: Math.floor(
+        Date.parse(params.periodStart) / MILLISECONDS_PER_SECOND,
+      ),
+      until: Math.floor(Date.parse(params.periodEnd) / MILLISECONDS_PER_SECOND),
+    },
+    params.metric,
+  );
+  const { data: existing, error: existingError } = await params.admin
+    .from("ig_account_insights")
+    .select("metrics")
+    .eq("group_id", params.groupId)
+    .maybeSingle();
+  if (existingError) {
+    throw existingError;
+  }
+  const metrics = isRecord(existing?.metrics) ? existing.metrics : {};
+  const { error } = await params.admin
+    .from("ig_account_insights")
+    .upsert(
+      {
+        ig_profile_id: params.profileId,
+        group_id: params.groupId,
+        period_start: params.periodStart,
+        period_end: params.periodEnd,
+        metrics: toJson({ ...metrics, [params.metric]: metricValue }),
+        captured_at: params.periodEnd,
+      },
+      { onConflict: "group_id" },
+    );
+  if (error) {
+    throw error;
   }
 }
 
@@ -223,22 +239,7 @@ async function getMediaFollowerBreakdown(
   }
 }
 
-async function getAccountInsights(params: {
-  provider: ResolvedMetaAccountAccess["connection"]["provider"];
-  igUserId: string;
-  token: string;
-  since: number;
-  until: number;
-}): Promise<Json> {
-  const entries = await mapWithConcurrency(
-    META_ACCOUNT_INSIGHT_METRICS,
-    META_FETCH_CONCURRENCY,
-    async (metric) => [metric, await getAccountInsightMetric(params, metric)] as const,
-  );
-  return Object.fromEntries(entries);
-}
-
-async function getAccountInsightMetric(
+async function getMetaAccountInsightMetric(
   params: {
     provider: ResolvedMetaAccountAccess["connection"]["provider"];
     igUserId: string;
@@ -531,15 +532,44 @@ function isExpectedUnavailableInsight(error: unknown): boolean {
   );
 }
 
-async function listExistingPosts(admin: AdminClient, profileId: string) {
-  const { data, error } = await admin
-    .from("ig_posts")
-    .select("*")
-    .eq("ig_profile_id", profileId);
-  if (error) {
-    throw error;
+async function listExistingPostsForMedia(
+  admin: AdminClient,
+  profileId: string,
+  media: MetaMedia[],
+) {
+  if (media.length === 0) {
+    return [];
   }
-  return data ?? [];
+
+  const postUrls = media.map((item) =>
+    getCanonicalInstagramPostUrl(item.permalink),
+  );
+  const mediaIds = media.map((item) => item.id);
+  const [byMetaId, byPostUrl] = await Promise.all([
+    admin
+      .from("ig_posts")
+      .select("*")
+      .eq("ig_profile_id", profileId)
+      .in("meta_media_id", mediaIds),
+    admin
+      .from("ig_posts")
+      .select("*")
+      .eq("ig_profile_id", profileId)
+      .in("post_url", postUrls),
+  ]);
+  if (byMetaId.error) {
+    throw byMetaId.error;
+  }
+  if (byPostUrl.error) {
+    throw byPostUrl.error;
+  }
+
+  return [
+    ...(byMetaId.data ?? []),
+    ...(byPostUrl.data ?? []).filter(
+      (post) => !byMetaId.data?.some((candidate) => candidate.id === post.id),
+    ),
+  ];
 }
 
 async function mapWithConcurrency<T, R>(

@@ -2,10 +2,14 @@ import { updateSession } from "@/lib/supabase/proxy";
 import { NextResponse, type NextRequest } from "next/server";
 
 const APIFY_IG_SCRAPES_WEBHOOK_PATH = "/api/webhooks/apify/ig-scrapes";
+const META_SCRAPES_QUEUE_PATH = "/api/queues/meta-scrapes";
 
 export async function proxy(request: NextRequest) {
-  // Apify cannot carry a Supabase session. The route verifies its own bearer secret.
-  if (request.nextUrl.pathname === APIFY_IG_SCRAPES_WEBHOOK_PATH) {
+  // Infrastructure callbacks cannot carry a Supabase session and verify themselves.
+  if (
+    request.nextUrl.pathname === APIFY_IG_SCRAPES_WEBHOOK_PATH ||
+    request.nextUrl.pathname === META_SCRAPES_QUEUE_PATH
+  ) {
     return NextResponse.next();
   }
 

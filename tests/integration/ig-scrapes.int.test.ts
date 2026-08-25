@@ -140,6 +140,48 @@ describe("groups", () => {
 
 describe("scheduled_scrapes", () => {
   describe("constraints", () => {
+    it("stores resumable state on a Meta scrape row", async () => {
+      await withRollback(async (client) => {
+        const auth = await insertAuthUser(client);
+        await asClaims(client, { sub: auth.id });
+        const profileId = await insertProfile(client, auth.id);
+        const groupId = await insertGroup(client, profileId, auth.id);
+        const state = {
+          version: 1,
+          phase: "media",
+          media_cursor: "cursor-2",
+          processed_media_count: 5,
+        };
+
+        const { rows } = await client.query(
+          `insert into public.scheduled_scrapes (group_id, scrape_type, state)
+           values ($1, 'meta', $2::jsonb)
+           returning scrape_type as "scrapeType", state`,
+          [groupId, JSON.stringify(state)],
+        );
+
+        expect(rows[0]).toEqual({ scrapeType: "meta", state });
+      });
+    });
+
+    it("defaults non-Meta scrape state to an empty object", async () => {
+      await withRollback(async (client) => {
+        const auth = await insertAuthUser(client);
+        await asClaims(client, { sub: auth.id });
+        const profileId = await insertProfile(client, auth.id);
+        const groupId = await insertGroup(client, profileId, auth.id);
+
+        const { rows } = await client.query(
+          `insert into public.scheduled_scrapes (group_id, scrape_type)
+           values ($1, 'posts')
+           returning state`,
+          [groupId],
+        );
+
+        expect(rows[0].state).toEqual({});
+      });
+    });
+
     it("stores apify_run_id when the actor is started", async () => {
       await withRollback(async (client) => {
         const auth = await insertAuthUser(client);

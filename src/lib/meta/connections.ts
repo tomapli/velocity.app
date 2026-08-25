@@ -178,6 +178,38 @@ export async function resolveMetaAccountAccess(
   return { account, connection: validated, token };
 }
 
+/** Loads the already-validated credentials used by resumable queue workers. */
+export async function loadStoredMetaAccountAccess(
+  admin: AdminClient,
+  accountId: string,
+): Promise<ResolvedMetaAccountAccess> {
+  const { data: account, error: accountError } = await admin
+    .from("meta_instagram_accounts")
+    .select("*")
+    .eq("id", accountId)
+    .single();
+  if (accountError) {
+    throw accountError;
+  }
+
+  const { data: connection, error: connectionError } = await admin
+    .from("meta_connections")
+    .select("*")
+    .eq("id", account.connection_id)
+    .single();
+  if (connectionError) {
+    throw connectionError;
+  }
+
+  const ciphertext =
+    account.access_token_ciphertext ?? connection.access_token_ciphertext;
+  return {
+    account,
+    connection,
+    token: decryptMetaToken(ciphertext),
+  };
+}
+
 export async function deleteMetaConnection(
   admin: AdminClient,
   connectionId: string,

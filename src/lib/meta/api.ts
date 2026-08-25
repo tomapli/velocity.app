@@ -64,6 +64,11 @@ const FacebookPagesSchema = z.object({ data: z.array(FacebookPageSchema) });
 
 const MetaPagingSchema = z.object({
   next: z.string().url().optional(),
+  cursors: z
+    .object({
+      after: z.string().optional(),
+    })
+    .optional(),
 });
 
 const MetaMediaSchema = z.object({
@@ -135,6 +140,11 @@ export interface MetaInstagramProfile {
   name: string | null;
   profilePictureUrl: string | null;
   username: string;
+}
+
+export interface MetaMediaPage {
+  items: MetaMedia[];
+  nextCursor: string | null;
 }
 
 export interface DiscoveredMetaInstagramAccount {
@@ -411,13 +421,15 @@ export async function refreshInstagramAccessToken(
   return toMetaAccessToken(response);
 }
 
-export async function listMetaMedia(params: {
+/** Loads one bounded media page and returns only the opaque continuation cursor. */
+export async function listMetaMediaPage(params: {
   provider: MetaOauthProvider;
   igUserId: string;
   token: string;
-  requestedPostCount: number | null;
   sinceWhen: string | null;
-}): Promise<MetaMedia[]> {
+  cursor: string | null;
+  limit: number;
+}): Promise<MetaMediaPage> {
   const fields = [
     "id",
     "caption",
@@ -432,29 +444,30 @@ export async function listMetaMedia(params: {
     "timestamp",
   ].join(",");
   const path = params.provider === "instagram" ? "me/media" : `${params.igUserId}/media`;
-  let nextUrl: URL | null = buildGraphUrl(params.provider, path, {
+  const query: Record<string, string> = {
     fields,
-    limit: String(META_MEDIA_PAGE_SIZE),
-  });
+    limit: String(params.limit),
+  };
+  if (params.cursor) {
+    query.after = params.cursor;
+  }
+  const url = buildGraphUrl(params.provider, path, query);
   const media: MetaMedia[] = [];
   const sinceTimestamp = params.sinceWhen ? Date.parse(params.sinceWhen) : null;
 
-  while (nextUrl) {
-    const page = MetaMediaPageSchema.parse(await fetchMetaJson(nextUrl, params.token));
-    for (const item of page.data) {
-      const uploadedAt = Date.parse(item.timestamp);
-      if (sinceTimestamp && Number.isFinite(uploadedAt) && uploadedAt < sinceTimestamp) {
-        return media;
-      }
-      media.push(item);
-      if (params.requestedPostCount != null && media.length >= params.requestedPostCount) {
-        return media;
-      }
+  const page = MetaMediaPageSchema.parse(await fetchMetaJson(url, params.token));
+  for (const item of page.data) {
+    const uploadedAt = Date.parse(item.timestamp);
+    if (sinceTimestamp && Number.isFinite(uploadedAt) && uploadedAt < sinceTimestamp) {
+      return { items: media, nextCursor: null };
     }
-    nextUrl = page.paging?.next ? toBearerPaginationUrl(page.paging.next) : null;
+    media.push(item);
   }
 
-  return media;
+  return {
+    items: media,
+    nextCursor: getMetaPagingCursor(page.paging),
+  };
 }
 
 export async function getMetaInsights(params: {
@@ -565,6 +578,18 @@ function toBearerPaginationUrl(value: string): URL {
   const url = new URL(value);
   url.searchParams.delete("access_token");
   return url;
+}
+
+function getMetaPagingCursor(
+  paging: z.infer<typeof MetaPagingSchema> | undefined,
+): string | null {
+  if (paging?.cursors?.after) {
+    return paging.cursors.after;
+  }
+  if (!paging?.next) {
+    return null;
+  }
+  return toBearerPaginationUrl(paging.next).searchParams.get("after");
 }
 
 function toMetaApiError(raw: unknown, status: number): MetaApiError {

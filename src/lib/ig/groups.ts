@@ -78,6 +78,10 @@ export function getIgScrapeJobStatus(job: IgScrapeJob): IgScrapeStatus {
     (scrape) => scrape.scrape_type === "posts" || scrape.scrape_type === "reels",
   );
   const details = job.scrapes.filter((scrape) => scrape.scrape_type === "post_details");
+  const meta = job.scrapes.filter((scrape) => scrape.scrape_type === "meta");
+  if (meta.some((scrape) => scrape.error_message)) {
+    return "error";
+  }
   if (details.some((scrape) => scrape.error_message)) {
     return "error";
   }

@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "src/app/api/queues/meta-scrapes/route.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "meta-scrapes",
+          "retryAfterSeconds": 5,
+          "initialDelaySeconds": 0
+        }
+      ]
+    }
+  }
+}

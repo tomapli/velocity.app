@@ -395,6 +395,7 @@ export type Database = {
           group_id: string
           id: string
           scrape_type: Database["public"]["Enums"]["scheduled_scrape_type"]
+          state: Json
           updated_at: string
         }
         Insert: {
@@ -406,6 +407,7 @@ export type Database = {
           group_id: string
           id?: string
           scrape_type: Database["public"]["Enums"]["scheduled_scrape_type"]
+          state?: Json
           updated_at?: string
         }
         Update: {
@@ -417,6 +419,7 @@ export type Database = {
           group_id?: string
           id?: string
           scrape_type?: Database["public"]["Enums"]["scheduled_scrape_type"]
+          state?: Json
           updated_at?: string
         }
         Relationships: [
@@ -442,7 +445,7 @@ export type Database = {
       ig_post_media_type: "carousel" | "short" | "static"
       ig_scrape_data_source: "public" | "meta_hybrid"
       meta_oauth_provider: "facebook" | "instagram"
-      scheduled_scrape_type: "posts" | "reels" | "post_details"
+      scheduled_scrape_type: "posts" | "reels" | "post_details" | "meta"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -573,7 +576,7 @@ export const Constants = {
       ig_post_media_type: ["carousel", "short", "static"],
       ig_scrape_data_source: ["public", "meta_hybrid"],
       meta_oauth_provider: ["facebook", "instagram"],
-      scheduled_scrape_type: ["posts", "reels", "post_details"],
+      scheduled_scrape_type: ["posts", "reels", "post_details", "meta"],
     },
   },
 } as const

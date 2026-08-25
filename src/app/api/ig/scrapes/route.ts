@@ -1,4 +1,4 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getErrorMessage } from "@/lib/errors";
@@ -9,12 +9,17 @@ import {
   resolveMetaAccountAccess,
   type ResolvedMetaAccountAccess,
 } from "@/lib/meta/connections";
-import { importMetaScrape } from "@/lib/meta/scrape";
+import { enqueueMetaScrape } from "@/lib/meta/scrape-queue";
+import {
+  createInitialMetaScrapeState,
+  toMetaScrapeStateJson,
+} from "@/lib/meta/scrape-state";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import type { Insertable } from "@/lib/supabase/tables";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 const CreateIgScrapeSchema = z.object({
   igUsername: z.string().trim().toLowerCase().regex(/^[a-z0-9._]{1,30}$/),
@@ -101,18 +106,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: groupError.message }, { status: 500 });
   }
 
+  const initialMetaState = metaAccess ? createInitialMetaScrapeState() : null;
+  const scrapeRows: Insertable<"scheduled_scrapes">[] = [
+    {
+      group_id: group.id,
+      scrape_type: "posts",
+    },
+    {
+      group_id: group.id,
+      scrape_type: "reels",
+    },
+    ...(initialMetaState
+      ? [
+          {
+            group_id: group.id,
+            scrape_type: "meta" as const,
+            state: toMetaScrapeStateJson(initialMetaState),
+          },
+        ]
+      : []),
+  ];
   const { data: scrapes, error: insertError } = await supabase
     .from("scheduled_scrapes")
-    .insert([
-      {
-        group_id: group.id,
-        scrape_type: "posts",
-      },
-      {
-        group_id: group.id,
-        scrape_type: "reels",
-      },
-    ])
+    .insert(scrapeRows)
     .select("*");
 
   if (insertError || !scrapes) {
@@ -124,21 +140,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    let metaImport: Parameters<typeof importMetaScrape>[0] | null = null;
-    if (metaAccess) {
-      metaImport = {
-        admin,
-        access: metaAccess,
-        groupId: group.id,
-        profileId: profile.id,
-        requestedPostCount,
-        sinceWhen,
-        listingScrapes: scrapes,
-      };
-    }
-
     const started = await Promise.all(
-      scrapes.map(async (scrape) => {
+      scrapes
+        .filter(
+          (scrape) =>
+            scrape.scrape_type === "posts" || scrape.scrape_type === "reels",
+        )
+        .map(async (scrape) => {
         const run = await startListingRun(token, {
           scrapeType: scrape.scrape_type === "reels" ? "reels" : "posts",
           username: profile.ig_username,
@@ -160,29 +168,18 @@ export async function POST(request: Request) {
         }
 
         return updated;
-      }),
+        }),
     );
+    const metaScrape = scrapes.find((scrape) => scrape.scrape_type === "meta");
+    if (metaScrape && initialMetaState) {
+      await enqueueMetaScrape(metaScrape.id, initialMetaState);
+    }
 
     const job = buildIgScrapeJobs(
       [group],
-      started,
+      metaScrape ? [...started, metaScrape] : started,
       new Map([[profile.id, profile]]),
     )[0];
-
-    if (metaImport) {
-      const importParams = metaImport;
-      after(async () => {
-        try {
-          await importMetaScrape(importParams);
-        } catch (error) {
-          console.error("Meta scrape import failed", {
-            error,
-            groupId: importParams.groupId,
-            profileId: importParams.profileId,
-          });
-        }
-      });
-    }
 
     return NextResponse.json({ job }, { status: 201 });
   } catch (error) {
