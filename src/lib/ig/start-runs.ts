@@ -23,6 +23,14 @@ type AppSupabase = SupabaseClient<Database>;
 type Group = Tables<"groups">;
 type ScheduledScrape = Tables<"scheduled_scrapes">;
 
+const DETAILS_SCRAPE_STATE_POST_URLS_KEY = "postUrls";
+
+export interface PendingDetailsPost {
+  id: string;
+  post_url: string;
+  uploaded_at: string | null;
+}
+
 export interface ListingRunInput {
   scrapeType: "posts" | "reels";
   username: string;
@@ -52,7 +60,7 @@ export async function startListingRun(
 }
 
 /**
- * Starts a post-details run for up to 100 pending URLs in a scrape group.
+ * Starts a post-details run for up to 100 not-yet-attempted URLs in a scrape group.
  */
 export async function startDetailsBatchForGroup(
   supabase: AppSupabase,
@@ -89,6 +97,7 @@ export async function startDetailsBatchForGroup(
   }
 
   const listingIds = listingScrapes.map((scrape) => scrape.id);
+  const attemptedShortcodes = getAttemptedDetailsShortcodes(groupScrapes ?? []);
   const remainingSlots = getRemainingDetailSlots(
     group,
     await countDetailedPosts(supabase, listingIds),
@@ -102,6 +111,7 @@ export async function startDetailsBatchForGroup(
     listingIds,
     group.since_when,
     Math.min(APIFY_DETAILS_BATCH_SIZE, remainingSlots),
+    attemptedShortcodes,
   );
   if (pending.length === 0) {
     return null;
@@ -112,6 +122,11 @@ export async function startDetailsBatchForGroup(
     .insert({
       group_id: groupId,
       scrape_type: "post_details",
+      state: {
+        [DETAILS_SCRAPE_STATE_POST_URLS_KEY]: pending.map(
+          (post) => post.post_url,
+        ),
+      },
     })
     .select("*")
     .single();
@@ -121,6 +136,20 @@ export async function startDetailsBatchForGroup(
   }
 
   try {
+    if (!(await ownsDetailsBatch(supabase, groupId, detailsScrape.id))) {
+      const { error: releaseError } = await supabase
+        .from("scheduled_scrapes")
+        .update({
+          finished_at: new Date().toISOString(),
+          state: {},
+        })
+        .eq("id", detailsScrape.id);
+      if (releaseError) {
+        throw releaseError;
+      }
+      return null;
+    }
+
     const run = await startActorRun(token, APIFY_INSTAGRAM_POST_DETAILS_ACTOR_ID, {
       postUrls: pending.map((post) => post.post_url),
     });
@@ -213,7 +242,8 @@ async function listPendingPostUrls(
   listingIds: string[],
   sinceWhen: string | null,
   limit: number,
-): Promise<Array<{ id: string; post_url: string }>> {
+  attemptedShortcodes: ReadonlySet<string>,
+): Promise<PendingDetailsPost[]> {
   const { data, error } = await supabase
     .from("ig_posts")
     .select("id, post_url, uploaded_at")
@@ -225,11 +255,25 @@ async function listPendingPostUrls(
     throw error;
   }
 
+  return selectPendingDetailsPosts(
+    data ?? [],
+    sinceWhen,
+    limit,
+    attemptedShortcodes,
+  );
+}
+
+export function selectPendingDetailsPosts(
+  posts: PendingDetailsPost[],
+  sinceWhen: string | null,
+  limit: number,
+  attemptedShortcodes: ReadonlySet<string>,
+): PendingDetailsPost[] {
   const sinceTimestamp = sinceWhen ? Date.parse(sinceWhen) : null;
 
   const seenShortcodes = new Set<string>();
 
-  return (data ?? [])
+  return posts
     .filter((post) => {
       if (!sinceTimestamp || !post.uploaded_at) {
         return true;
@@ -240,7 +284,11 @@ async function listPendingPostUrls(
     })
     .filter((post) => {
       const shortcode = getInstagramShortcode(post.post_url);
-      if (!shortcode || seenShortcodes.has(shortcode)) {
+      if (
+        !shortcode ||
+        seenShortcodes.has(shortcode) ||
+        attemptedShortcodes.has(shortcode)
+      ) {
         return false;
       }
 
@@ -248,6 +296,61 @@ async function listPendingPostUrls(
       return true;
     })
     .slice(0, limit);
+}
+
+export function getAttemptedDetailsShortcodes(
+  scrapes: ScheduledScrape[],
+): Set<string> {
+  const shortcodes = new Set<string>();
+
+  for (const scrape of scrapes) {
+    if (scrape.scrape_type !== "post_details") {
+      continue;
+    }
+
+    for (const postUrl of getDetailsScrapePostUrls(scrape.state)) {
+      const shortcode = getInstagramShortcode(postUrl);
+      if (shortcode) {
+        shortcodes.add(shortcode);
+      }
+    }
+  }
+
+  return shortcodes;
+}
+
+function getDetailsScrapePostUrls(state: ScheduledScrape["state"]): string[] {
+  if (!state || typeof state !== "object" || Array.isArray(state)) {
+    return [];
+  }
+
+  const postUrls = state[DETAILS_SCRAPE_STATE_POST_URLS_KEY];
+  return Array.isArray(postUrls)
+    ? postUrls.filter((postUrl): postUrl is string => typeof postUrl === "string")
+    : [];
+}
+
+async function ownsDetailsBatch(
+  supabase: AppSupabase,
+  groupId: string,
+  scrapeId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("scheduled_scrapes")
+    .select("id")
+    .eq("group_id", groupId)
+    .eq("scrape_type", "post_details")
+    .is("finished_at", null)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.id === scrapeId;
 }
 
 function getRemainingDetailSlots(
