@@ -64,15 +64,21 @@ export function LoginIntroOverlayView({
       return;
     }
 
-    startedRef.current = true;
-
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      startedRef.current = true;
       onPlayed();
       return;
     }
 
-    setPhase("playing");
-    onPlayed();
+    const animationFrameId = window.requestAnimationFrame(() => {
+      startedRef.current = true;
+      setPhase("playing");
+      onPlayed();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+    };
   }, [onPlayed, shouldPlay]);
 
   useEffect(() => {

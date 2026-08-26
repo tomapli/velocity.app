@@ -65,8 +65,8 @@ export async function startDetailsBatchForGroup(
   ] = await Promise.all([
     supabase.from("groups").select("*").eq("id", groupId).single(),
     supabase
-    .from("scheduled_scrapes")
-    .select("*")
+      .from("scheduled_scrapes")
+      .select("*")
       .eq("group_id", groupId),
   ]);
 
@@ -88,7 +88,6 @@ export async function startDetailsBatchForGroup(
     return null;
   }
 
-  const template = listingScrapes[0];
   const listingIds = listingScrapes.map((scrape) => scrape.id);
   const remainingSlots = getRemainingDetailSlots(
     group,
