@@ -55,6 +55,8 @@ interface HeatmapCell {
 interface IgAccountInsightsPanelProps {
   insights: IgAccountInsights[];
   isRefreshing?: boolean;
+  loadingRangeDays?: MetaAccountInsightRangeDays | number | null;
+  onRangeRequest?: (periodDays: MetaAccountInsightRangeDays) => void;
 }
 
 /** Key metrics shown as always-visible cards with their value splits. */
@@ -127,6 +129,8 @@ const HEATMAP_CONTRAST_EXPONENT = 3;
 export function IgAccountInsightsPanel({
   insights,
   isRefreshing = false,
+  loadingRangeDays = null,
+  onRangeRequest,
 }: IgAccountInsightsPanelProps) {
   const [rangeDays, setRangeDays] = useState<MetaAccountInsightRangeDays>(
     META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
@@ -219,7 +223,11 @@ export function IgAccountInsightsPanel({
           value={String(rangeDays)}
           onValueChange={(value) => {
             if (value) {
-              setRangeDays(Number(value) as MetaAccountInsightRangeDays);
+              const nextRange = Number(value) as MetaAccountInsightRangeDays;
+              setRangeDays(nextRange);
+              if (!insights.some((row) => row.period_days === nextRange)) {
+                onRangeRequest?.(nextRange);
+              }
             }
           }}
         >
@@ -231,7 +239,17 @@ export function IgAccountInsightsPanel({
         </ToggleGroup>
       </div>
 
-      {selected == null ? (
+      {selected == null && loadingRangeDays === rangeDays ? (
+        <Empty className="border">
+          <EmptyHeader>
+            <Spinner />
+            <EmptyTitle>Loading {rangeDays}-day insights</EmptyTitle>
+            <EmptyDescription>
+              This range is downloaded only when you open it.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : selected == null ? (
         <Empty className="border">
           <EmptyHeader>
             <EmptyTitle>No {rangeDays}-day insights yet</EmptyTitle>

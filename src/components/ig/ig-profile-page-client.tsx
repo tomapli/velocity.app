@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Instagram, LoaderCircle } from "lucide-react";
 
 import { IgPostsTable } from "@/components/ig/ig-posts-table";
-import { IgAccountInsightsPanel } from "@/components/ig/ig-account-insights";
+import { IgPostsAutoLoader } from "@/components/ig/ig-posts-auto-loader";
 import { IgPostsToolbar } from "@/components/ig/ig-posts-toolbar";
 import { ScrapeParamsDialog } from "@/components/ig/scrape-params-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +27,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   filterIgPostsByMediaType,
   postsToCsv,
@@ -46,14 +48,16 @@ import {
 import type {
   Group,
   IgAccountInsights,
-  IgPost,
+  IgPostsPage,
   IgProfile,
   ScheduledScrape,
 } from "@/lib/ig/queries";
 import {
-  listIgAccountInsightsForGroup,
+  getIgAccountInsightsForGroupPeriod,
   listIgPostsForProfile,
+  listIgPostsPageForProfile,
 } from "@/lib/ig/queries";
+import { deduplicateIgPostsByShortcode } from "@/lib/ig/post-identity";
 import { META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS } from "@/lib/meta/constants";
 import { scheduleIgScrape } from "@/lib/ig/schedule-scrape";
 import { useIgScrapesRealtime } from "@/lib/ig/use-ig-scrapes-realtime";
@@ -63,8 +67,7 @@ import { cn } from "@/lib/utils";
 interface IgProfilePageClientProps {
   username: string;
   initialJob: IgScrapeJob | null;
-  initialPosts: IgPost[];
-  initialAccountInsights: IgAccountInsights[];
+  initialPostsPage: IgPostsPage;
 }
 
 type PromptMode = "generate" | "regenerate" | null;
@@ -76,30 +79,44 @@ const STATUS_LABELS: Record<IgScrapeStatus, string> = {
   error: "Error",
 };
 
+const IgAccountInsightsPanel = dynamic(() =>
+  import("@/components/ig/ig-account-insights").then(
+    (module) => module.IgAccountInsightsPanel,
+  ),
+  { loading: AccountInsightsSkeleton },
+);
+
 /**
  * Instagram profile results: live scrape status, filters, and the posts table.
  */
 export function IgProfilePageClient({
   username,
   initialJob,
-  initialPosts,
-  initialAccountInsights,
+  initialPostsPage,
 }: IgProfilePageClientProps) {
   const [profile, setProfile] = useState<IgProfile | null>(initialJob?.profile ?? null);
   const [groups, setGroups] = useState<Group[]>(initialJob ? [initialJob.group] : []);
   const [scrapes, setScrapes] = useState<ScheduledScrape[]>(initialJob?.scrapes ?? []);
-  const [posts, setPosts] = useState<IgPost[]>(initialPosts);
-  const [accountInsights, setAccountInsights] = useState<IgAccountInsights[]>(
-    initialAccountInsights,
-  );
+  const [posts, setPosts] = useState(initialPostsPage.posts);
+  const [hasMorePosts, setHasMorePosts] = useState(initialPostsPage.hasMore);
+  const [nextPostsOffset, setNextPostsOffset] = useState(initialPostsPage.nextOffset);
+  const [accountInsights, setAccountInsights] = useState<IgAccountInsights[]>([]);
   const [promptMode, setPromptMode] = useState<PromptMode>(() =>
     resolveInitialPrompt(initialJob),
   );
   const [paramsDialogOpen, setParamsDialogOpen] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [loadingInsightsRange, setLoadingInsightsRange] = useState<number | null>(
+    initialJob?.group.data_source === "meta_hybrid"
+      ? META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS
+      : null,
+  );
   const [mediaTypes, setMediaTypes] = useState<IgMediaType[]>([]);
   const [sortKey, setSortKey] = useState<IgPostSortKey>("uploaded_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const supabase = useMemo(() => createClient(), []);
 
   const job = useMemo(() => {
     if (!profile) {
@@ -110,6 +127,16 @@ export function IgProfilePageClient({
       buildIgScrapeJobs(groups, scrapes, new Map([[profile.id, profile]]))[0] ?? null
     );
   }, [groups, profile, scrapes]);
+
+  const postsDataVersion = getPostsDataVersion(profile?.id ?? null, job);
+  const insightsDataVersion = getInsightsDataVersion(job);
+  const insightsGroupId =
+    job?.group.data_source === "meta_hybrid" ? job.group.id : null;
+  const loadedPostsDataVersion = useRef(
+    getPostsDataVersion(initialJob?.profile.id ?? null, initialJob),
+  );
+  const loadedInsightsDataVersion = useRef("unloaded");
+  const loadMoreRequestPending = useRef(false);
 
   const upsertScrape = useCallback(
     (next: ScheduledScrape) => {
@@ -158,26 +185,28 @@ export function IgProfilePageClient({
   });
 
   useEffect(() => {
-    if (!profile) {
+    const profileId = profile?.id;
+    if (!profileId) {
       setPosts([]);
-      setAccountInsights([]);
+      setHasMorePosts(false);
+      setNextPostsOffset(0);
+      return;
+    }
+    if (loadedPostsDataVersion.current === postsDataVersion) {
       return;
     }
 
+    loadedPostsDataVersion.current = postsDataVersion;
+
     let cancelled = false;
-    const supabase = createClient();
 
     const load = async () => {
       try {
-        const [nextPosts, nextAccountInsights] = await Promise.all([
-          listIgPostsForProfile(supabase, profile.id),
-          job
-            ? listIgAccountInsightsForGroup(supabase, job.group.id)
-            : Promise.resolve([]),
-        ]);
+        const page = await listIgPostsPageForProfile(supabase, profileId);
         if (!cancelled) {
-          setPosts(nextPosts);
-          setAccountInsights(nextAccountInsights);
+          setPosts(page.posts);
+          setHasMorePosts(page.hasMore);
+          setNextPostsOffset(page.nextOffset);
         }
       } catch (error) {
         if (!cancelled) {
@@ -191,7 +220,80 @@ export function IgProfilePageClient({
     return () => {
       cancelled = true;
     };
-  }, [profile, job]);
+  }, [postsDataVersion, profile?.id, supabase]);
+
+  useEffect(() => {
+    if (!insightsGroupId) {
+      setAccountInsights([]);
+      setLoadingInsightsRange(null);
+      return;
+    }
+    if (loadedInsightsDataVersion.current === insightsDataVersion) {
+      return;
+    }
+
+    loadedInsightsDataVersion.current = insightsDataVersion;
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const nextAccountInsights = await getIgAccountInsightsForGroupPeriod(
+          supabase,
+          insightsGroupId,
+          META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
+        );
+        if (!cancelled && nextAccountInsights) {
+          setAccountInsights((current) =>
+            upsertAccountInsights(current, nextAccountInsights),
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(
+            error instanceof Error ? error.message : "Could not load account insights",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingInsightsRange(null);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [insightsDataVersion, insightsGroupId, supabase]);
+
+  const handleInsightsRangeRequest = async (periodDays: number) => {
+    if (
+      !insightsGroupId ||
+      loadingInsightsRange != null ||
+      accountInsights.some((row) => row.period_days === periodDays)
+    ) {
+      return;
+    }
+
+    setLoadingInsightsRange(periodDays);
+    try {
+      const nextInsights = await getIgAccountInsightsForGroupPeriod(
+        supabase,
+        insightsGroupId,
+        periodDays,
+      );
+      if (nextInsights) {
+        setAccountInsights((current) => upsertAccountInsights(current, nextInsights));
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not load account insights",
+      );
+    } finally {
+      setLoadingInsightsRange(null);
+    }
+  };
 
   const status = job ? getIgScrapeJobStatus(job) : "waiting";
   const visiblePosts = useMemo(
@@ -224,7 +326,14 @@ export function IgProfilePageClient({
       setGroups([created.group]);
       setScrapes(created.scrapes);
       setPosts([]);
+      setHasMorePosts(false);
+      setNextPostsOffset(0);
       setAccountInsights([]);
+      setLoadingInsightsRange(
+        created.group.data_source === "meta_hybrid"
+          ? META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS
+          : null,
+      );
       setParamsDialogOpen(false);
       toast.success(`Scheduled @${username}`);
     } catch (error) {
@@ -234,23 +343,70 @@ export function IgProfilePageClient({
     }
   };
 
-  const handleExport = () => {
-    const csv = postsToCsv(visiblePosts, {
-      dataSource: job?.group.data_source,
-      accountInsights:
-        accountInsights.find(
-          (row) => row.period_days === META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
-        ) ??
-        accountInsights.at(-1) ??
-        null,
-    });
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${username}-ig-posts.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const handleLoadMore = useCallback(async () => {
+    if (
+      !profile ||
+      !hasMorePosts ||
+      loadMoreRequestPending.current
+    ) {
+      return;
+    }
+
+    loadMoreRequestPending.current = true;
+    setIsLoadingMore(true);
+    try {
+      const page = await listIgPostsPageForProfile(
+        supabase,
+        profile.id,
+        nextPostsOffset,
+      );
+      setPosts((current) => mergePosts(current, page.posts));
+      setHasMorePosts(page.hasMore);
+      setNextPostsOffset(page.nextOffset);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load more posts");
+    } finally {
+      loadMoreRequestPending.current = false;
+      setIsLoadingMore(false);
+    }
+  }, [hasMorePosts, nextPostsOffset, profile, supabase]);
+
+  const handleExport = async () => {
+    if (!profile || isExporting) {
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const exportPosts = hasMorePosts
+        ? await listIgPostsForProfile(supabase, profile.id)
+        : posts;
+      const visibleExportPosts = sortIgPosts(
+        filterIgPostsByMediaType(exportPosts, mediaTypes),
+        sortKey,
+        sortDirection,
+      );
+      const csv = postsToCsv(visibleExportPosts, {
+        dataSource: job?.group.data_source,
+        accountInsights:
+          accountInsights.find(
+            (row) => row.period_days === META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
+          ) ??
+          accountInsights.at(-1) ??
+          null,
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${username}-ig-posts.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not export posts");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const isBusy = status === "waiting" || status === "scraping";
@@ -260,7 +416,16 @@ export function IgProfilePageClient({
       <PageHeader
         title={`@${username}`}
         description={profile?.ig_name ?? profile?.description ?? "Instagram profile results"}
-        count={{ value: visiblePosts.length, label: visiblePosts.length === 1 ? "post" : "posts" }}
+        count={{
+          value: visiblePosts.length,
+          label: hasMorePosts
+            ? visiblePosts.length === 1
+              ? "loaded post"
+              : "loaded posts"
+            : visiblePosts.length === 1
+              ? "post"
+              : "posts",
+        }}
         action={
           <div className="flex items-center gap-2">
             {job ? (
@@ -286,14 +451,19 @@ export function IgProfilePageClient({
         onSortKeyChange={setSortKey}
         onSortDirectionChange={setSortDirection}
         onRescan={() => setParamsDialogOpen(true)}
-        onExport={handleExport}
-        canExport={visiblePosts.length > 0}
+        onExport={() => void handleExport()}
+        canExport={posts.length > 0}
+        isExporting={isExporting}
         isRescanning={isScheduling}
       />
 
-      {accountInsights.length > 0 ? (
+      {loadingInsightsRange != null && accountInsights.length === 0 ? (
+        <AccountInsightsSkeleton />
+      ) : accountInsights.length > 0 ? (
         <IgAccountInsightsPanel
           insights={accountInsights}
+          loadingRangeDays={loadingInsightsRange}
+          onRangeRequest={(periodDays) => void handleInsightsRangeRequest(periodDays)}
           isRefreshing={job?.scrapes.some(
             (scrape) => scrape.scrape_type === "meta" && !scrape.finished_at,
           )}
@@ -347,6 +517,14 @@ export function IgProfilePageClient({
         />
       )}
 
+      {hasMorePosts && posts.length > 0 ? (
+        <IgPostsAutoLoader
+          hasMore={hasMorePosts}
+          isLoading={isLoadingMore}
+          onLoadMore={handleLoadMore}
+        />
+      ) : null}
+
       <Dialog open={promptMode != null} onOpenChange={(open) => !open && setPromptMode(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -379,6 +557,62 @@ export function IgProfilePageClient({
         onConfirm={handleSchedule}
       />
     </div>
+  );
+}
+
+function getPostsDataVersion(
+  profileId: string | null,
+  job: IgScrapeJob | null,
+): string {
+  const finishedRuns = job?.scrapes
+    .filter((scrape) => scrape.scrape_type !== "meta")
+    .map((scrape) => `${scrape.id}:${scrape.finished_at ?? "pending"}`)
+    .sort()
+    .join(",") ?? "";
+
+  return `${profileId ?? "none"}:${job?.group.id ?? "none"}:${finishedRuns}`;
+}
+
+function getInsightsDataVersion(job: IgScrapeJob | null): string {
+  const finishedRuns = job?.scrapes
+    .filter((scrape) => scrape.scrape_type === "meta")
+    .map((scrape) => `${scrape.id}:${scrape.finished_at ?? "pending"}`)
+    .sort()
+    .join(",") ?? "";
+
+  return `${job?.group.id ?? "none"}:${finishedRuns}`;
+}
+
+function mergePosts(
+  current: IgPostsPage["posts"],
+  next: IgPostsPage["posts"],
+): IgPostsPage["posts"] {
+  return deduplicateIgPostsByShortcode([...current, ...next]);
+}
+
+function upsertAccountInsights(
+  current: IgAccountInsights[],
+  next: IgAccountInsights,
+): IgAccountInsights[] {
+  return [
+    ...current.filter((row) => row.period_days !== next.period_days),
+    next,
+  ].sort((left, right) => left.period_days - right.period_days);
+}
+
+function AccountInsightsSkeleton() {
+  return (
+    <section className="space-y-4" aria-label="Loading account insights">
+      <div className="space-y-2">
+        <Skeleton className="h-6 w-44" />
+        <Skeleton className="h-4 w-64 max-w-full" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        {Array.from({ length: 4 }, (_, index) => (
+          <Skeleton key={index} className="h-44 rounded-lg" />
+        ))}
+      </div>
+    </section>
   );
 }
 

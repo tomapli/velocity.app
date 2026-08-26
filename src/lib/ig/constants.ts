@@ -28,3 +28,7 @@ export const IG_PENDING_SCRAPES_STORAGE_KEY = "velocity:pending-ig-scrapes";
 export const IG_DEFAULT_REQUESTED_POST_COUNT = 12;
 
 export const IG_REQUESTED_POST_COUNT_MAX = 500;
+
+export const IG_POSTS_PAGE_SIZE = 25;
+
+export const IG_POSTS_EXPORT_PAGE_SIZE = 500;

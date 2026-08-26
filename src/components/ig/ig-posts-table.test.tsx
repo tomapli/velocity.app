@@ -48,7 +48,7 @@ const sortProps = {
 
 describe("IgPostsTable", () => {
   it("renders available metrics and hides omitted values", () => {
-    render(
+    const { container } = render(
       <IgPostsTable
         username="velocity"
         posts={[
@@ -73,6 +73,7 @@ describe("IgPostsTable", () => {
       "href",
       "/ig/velocity/e1000000-0000-4000-8000-000000000001",
     );
+    expect(container.querySelector("img")).toHaveAttribute("loading", "lazy");
     expect(screen.queryByText("Comment quality")).not.toBeInTheDocument();
   });
 
@@ -153,6 +154,7 @@ describe("IgPostsToolbar filters", () => {
         onRescan={vi.fn()}
         onExport={vi.fn()}
         canExport
+        isExporting={false}
         isRescanning={false}
       />,
     );

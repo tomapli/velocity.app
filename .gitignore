@@ -84,3 +84,5 @@ scripts/output/
 docs/.vitepress/cache
 docs/.vitepress/dist
 .vitepress
+# Local Firecrawl documentation cache
+.firecrawl/

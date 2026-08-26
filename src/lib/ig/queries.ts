@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { buildIgScrapeJobs, type IgScrapeJob } from "@/lib/ig/groups";
+import {
+  IG_POSTS_EXPORT_PAGE_SIZE,
+  IG_POSTS_PAGE_SIZE,
+} from "@/lib/ig/constants";
 import { deduplicateIgPostsByShortcode } from "@/lib/ig/post-identity";
 import type { Database } from "@/lib/supabase/database.types";
 import { throwQueryError } from "@/lib/supabase/throw-query-error";
@@ -11,6 +15,65 @@ export type Group = Tables<"groups">;
 export type ScheduledScrape = Tables<"scheduled_scrapes">;
 export type IgPost = Tables<"ig_posts">;
 export type IgAccountInsights = Tables<"ig_account_insights">;
+
+export type IgPostListItem = Pick<
+  IgPost,
+  | "id"
+  | "ig_profile_id"
+  | "uploaded_at"
+  | "thumbnail_url"
+  | "post_url"
+  | "first_frame_url"
+  | "video_embed_url"
+  | "media_type"
+  | "video_length_secs"
+  | "view_count"
+  | "save_count"
+  | "share_count"
+  | "comment_count"
+  | "like_count"
+  | "follows_count"
+  | "follower_view_count"
+  | "non_follower_view_count"
+  | "follower_non_follower_ratio"
+  | "reach_count"
+  | "hook_rate"
+  | "average_watch_time_ms"
+  | "hold_rate"
+  | "description"
+>;
+
+export interface IgPostsPage {
+  posts: IgPostListItem[];
+  hasMore: boolean;
+  nextOffset: number;
+}
+
+const IG_POST_LIST_COLUMNS = `
+  id,
+  ig_profile_id,
+  uploaded_at,
+  thumbnail_url,
+  post_url,
+  first_frame_url,
+  video_embed_url,
+  media_type,
+  video_length_secs,
+  view_count,
+  save_count,
+  share_count,
+  comment_count,
+  like_count,
+  follows_count,
+  follower_view_count,
+  non_follower_view_count,
+  follower_non_follower_ratio,
+  reach_count,
+  hook_rate,
+  average_watch_time_ms,
+  hold_rate,
+  description
+` as const;
 
 export interface ScheduleIgScrapeParams {
   igUsername: string;
@@ -117,24 +180,59 @@ export async function getLatestIgScrapeJobForUsername(
   )[0] ?? null;
 }
 
-/**
- * Loads detailed posts for a profile, newest upload first.
- */
-export async function listIgPostsForProfile(
+/** Loads one lightweight page of profile posts, newest upload first. */
+export async function listIgPostsPageForProfile(
   supabase: SupabaseClient<Database>,
   profileId: string,
-): Promise<IgPost[]> {
+  offset = 0,
+  pageSize = IG_POSTS_PAGE_SIZE,
+): Promise<IgPostsPage> {
   const { data, error } = await supabase
     .from("ig_posts")
-    .select("*")
+    .select(IG_POST_LIST_COLUMNS)
     .eq("ig_profile_id", profileId)
-    .order("uploaded_at", { ascending: false });
+    .order("uploaded_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(offset, offset + pageSize);
 
   if (error) {
     return throwQueryError(error);
   }
 
-  return deduplicateIgPostsByShortcode(data ?? []);
+  const rows: IgPostListItem[] = data ?? [];
+  const pageRows = rows.slice(0, pageSize);
+
+  return {
+    posts: deduplicateIgPostsByShortcode(pageRows),
+    hasMore: rows.length > pageSize,
+    nextOffset: offset + pageRows.length,
+  };
+}
+
+/**
+ * Loads every lightweight post page for explicit full-dataset actions such as CSV export.
+ */
+export async function listIgPostsForProfile(
+  supabase: SupabaseClient<Database>,
+  profileId: string,
+): Promise<IgPostListItem[]> {
+  const posts: IgPostListItem[] = [];
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const page = await listIgPostsPageForProfile(
+      supabase,
+      profileId,
+      offset,
+      IG_POSTS_EXPORT_PAGE_SIZE,
+    );
+    posts.push(...page.posts);
+    offset = page.nextOffset;
+    hasMore = page.hasMore;
+  }
+
+  return deduplicateIgPostsByShortcode(posts);
 }
 
 /** Loads every private account-insight range snapshot available for a group. */
@@ -151,6 +249,24 @@ export async function listIgAccountInsightsForGroup(
     return throwQueryError(error);
   }
   return data ?? [];
+}
+
+/** Loads one account-insight window so large range snapshots can be fetched on demand. */
+export async function getIgAccountInsightsForGroupPeriod(
+  supabase: SupabaseClient<Database>,
+  groupId: string,
+  periodDays: number,
+): Promise<IgAccountInsights | null> {
+  const { data, error } = await supabase
+    .from("ig_account_insights")
+    .select("*")
+    .eq("group_id", groupId)
+    .eq("period_days", periodDays)
+    .maybeSingle();
+  if (error) {
+    return throwQueryError(error);
+  }
+  return data;
 }
 
 /**

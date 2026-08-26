@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { IgAccountInsights } from "@/lib/ig/queries";
 import type { Json } from "@/lib/supabase/database.types";
@@ -111,5 +111,22 @@ describe("IgAccountInsightsPanel", () => {
     await user.click(screen.getByRole("radio", { name: "30d" }));
 
     expect(screen.getByText("No 30-day insights yet")).toBeInTheDocument();
+  });
+
+  it("requests an unloaded range only when it is selected", async () => {
+    const user = userEvent.setup();
+    const onRangeRequest = vi.fn();
+    render(
+      <IgAccountInsightsPanel
+        insights={[makeRow(180, makeViewsMetrics(42))]}
+        onRangeRequest={onRangeRequest}
+      />,
+    );
+
+    expect(onRangeRequest).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("radio", { name: "30d" }));
+
+    expect(onRangeRequest).toHaveBeenCalledWith(30);
   });
 });

@@ -1,6 +1,9 @@
 import type { Database } from "@/lib/supabase/database.types";
 import { summarizeAccountInsights } from "@/lib/ig/account-insights";
-import type { IgAccountInsights, IgPost } from "@/lib/ig/queries";
+import type {
+  IgAccountInsights,
+  IgPostListItem,
+} from "@/lib/ig/queries";
 
 export type IgMediaType = Database["public"]["Enums"]["ig_post_media_type"];
 export type MetricTone = "pass" | "near" | "miss" | "neutral";
@@ -114,7 +117,7 @@ const DATE_FORMATTER = new Intl.DateTimeFormat("en", {
  * Derives rates and color tones from a stored Instagram post.
  * Omitted source fields stay omitted — they are never filled with zeros.
  */
-export function getIgPostMetrics(post: IgPost): IgPostMetrics {
+export function getIgPostMetrics(post: IgPostListItem): IgPostMetrics {
   const descriptionLength = post.description == null ? null : post.description.length;
   const views = post.view_count;
   const canRate = views != null && views > 0;
@@ -135,7 +138,10 @@ export function getIgPostMetrics(post: IgPost): IgPostMetrics {
 /**
  * Returns a comparable numeric value for table sorting.
  */
-export function getIgPostSortValue(post: IgPost, key: IgPostSortKey): number | null {
+export function getIgPostSortValue(
+  post: IgPostListItem,
+  key: IgPostSortKey,
+): number | null {
   const metrics = getIgPostMetrics(post);
 
   switch (key) {
@@ -190,10 +196,10 @@ export function getIgPostSortValue(post: IgPost, key: IgPostSortKey): number | n
  * Sorts posts by a metric, sending omitted values to the end.
  */
 export function sortIgPosts(
-  posts: IgPost[],
+  posts: IgPostListItem[],
   key: IgPostSortKey,
   direction: "asc" | "desc",
-): IgPost[] {
+): IgPostListItem[] {
   const sign = direction === "asc" ? 1 : -1;
 
   return [...posts].sort((left, right) => {
@@ -221,9 +227,9 @@ export function sortIgPosts(
  * Filters posts to the selected media types. An empty selection shows every type.
  */
 export function filterIgPostsByMediaType(
-  posts: IgPost[],
+  posts: IgPostListItem[],
   mediaTypes: readonly IgMediaType[],
-): IgPost[] {
+): IgPostListItem[] {
   if (mediaTypes.length === 0) {
     return posts;
   }
@@ -283,7 +289,7 @@ export function metricToneClassName(tone: MetricTone): string {
  * Builds a CSV document from visible post fields. Omitted values stay empty cells.
  */
 export function postsToCsv(
-  posts: IgPost[],
+  posts: IgPostListItem[],
   options: {
     dataSource?: Database["public"]["Enums"]["ig_scrape_data_source"];
     accountInsights?: IgAccountInsights | null;
@@ -370,7 +376,7 @@ export function postsToCsv(
   return sections.join("\n");
 }
 
-function scoreUnweightedEr(post: IgPost, views: number): ScoredValue | null {
+function scoreUnweightedEr(post: IgPostListItem, views: number): ScoredValue | null {
   const engagements = [post.like_count, post.comment_count, post.save_count, post.share_count];
   if (engagements.every((value) => value == null)) {
     return null;
@@ -380,7 +386,7 @@ function scoreUnweightedEr(post: IgPost, views: number): ScoredValue | null {
   return scoreAgainstMin((total / views) * 100, IG_UNWEIGHTED_ER_TARGET, "≥ 5%");
 }
 
-function scoreWeightedEr(post: IgPost, views: number): ScoredValue | null {
+function scoreWeightedEr(post: IgPostListItem, views: number): ScoredValue | null {
   const engagements = [post.like_count, post.comment_count, post.save_count, post.share_count];
   if (engagements.every((value) => value == null)) {
     return null;

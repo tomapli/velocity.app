@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownUp, Download, RefreshCw } from "lucide-react";
+import { ArrowDownUp, Download, LoaderCircle, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +31,7 @@ interface IgPostsToolbarProps {
   onRescan: () => void;
   onExport: () => void;
   canExport: boolean;
+  isExporting: boolean;
   isRescanning: boolean;
 }
 
@@ -47,6 +48,7 @@ export function IgPostsToolbar({
   onRescan,
   onExport,
   canExport,
+  isExporting,
   isRescanning,
 }: IgPostsToolbarProps) {
   const sortLabel =
@@ -105,9 +107,15 @@ export function IgPostsToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button type="button" variant="outline" size="sm" onClick={onExport} disabled={!canExport}>
-          <Download />
-          Export CSV
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onExport}
+          disabled={!canExport || isExporting}
+        >
+          {isExporting ? <LoaderCircle className="animate-spin" /> : <Download />}
+          {isExporting ? "Exporting…" : "Export CSV"}
         </Button>
         <Button type="button" size="sm" onClick={onRescan} disabled={isRescanning}>
           <RefreshCw />

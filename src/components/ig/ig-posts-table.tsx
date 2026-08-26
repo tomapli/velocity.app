@@ -31,12 +31,12 @@ import {
   MEDIA_TYPE_LABELS,
   type IgPostSortKey,
 } from "@/lib/ig/metrics";
-import type { IgPost } from "@/lib/ig/queries";
+import type { IgPostListItem } from "@/lib/ig/queries";
 import { cn } from "@/lib/utils";
 
 interface IgPostsTableProps {
   username: string;
-  posts: IgPost[];
+  posts: IgPostListItem[];
   sortKey: IgPostSortKey;
   sortDirection: "asc" | "desc";
   onSortKeyChange: (key: IgPostSortKey) => void;
@@ -46,7 +46,10 @@ interface IgPostsTableProps {
 const PREVIEW_PRIMARY_SIZE = "size-20";
 const PREVIEW_SECONDARY_SIZE = "size-14";
 
-const MEDIA_TYPE_BADGE_CLASS: Record<NonNullable<IgPost["media_type"]>, string> = {
+const MEDIA_TYPE_BADGE_CLASS: Record<
+  NonNullable<IgPostListItem["media_type"]>,
+  string
+> = {
   short: "border-chart-3/30 bg-chart-3/10 text-chart-3-strong",
   carousel: "border-chart-4/30 bg-chart-4/15 text-foreground",
   static: "border-chart-5/30 bg-chart-5/10 text-foreground",
@@ -311,7 +314,7 @@ function SortableTableHead({
   );
 }
 
-function IgPostRow({ username, post }: { username: string; post: IgPost }) {
+function IgPostRow({ username, post }: { username: string; post: IgPostListItem }) {
   const metrics = getIgPostMetrics(post);
   const detailHref = `/ig/${username}/${post.id}`;
 
@@ -430,7 +433,7 @@ function IgPostRow({ username, post }: { username: string; post: IgPost }) {
   );
 }
 
-function PostPreview({ post }: { post: IgPost }) {
+function PostPreview({ post }: { post: IgPostListItem }) {
   const isVideo = post.media_type === "short" || Boolean(post.video_embed_url);
   const isCarousel = post.media_type === "carousel";
 

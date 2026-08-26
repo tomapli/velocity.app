@@ -40,6 +40,8 @@ export function IgRemoteImage({ src, alt, className }: IgRemoteImageProps) {
       src={src}
       alt={alt}
       className={cn("object-cover", className)}
+      loading="lazy"
+      decoding="async"
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
     />
