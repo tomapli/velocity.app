@@ -360,11 +360,50 @@ function sortPoints(points: AccountInsightPoint[]): AccountInsightPoint[] {
 const DAYS_PER_WEEK = 7;
 const HOURS_PER_DAY = 24;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000;
+const MILLISECONDS_PER_HOUR = 60 * 60 * 1_000;
+
+/** Audience time zone the online-followers heatmap is reported in. */
+export const INSIGHTS_TIME_ZONE = "Europe/Prague";
+export const INSIGHTS_TIME_ZONE_LABEL = "Prague time";
+
+const HEATMAP_SLOT_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: INSIGHTS_TIME_ZONE,
+  weekday: "short",
+  hour: "numeric",
+  hourCycle: "h23",
+});
+const WEEKDAY_ROWS: Record<string, number> = {
+  Mon: 0,
+  Tue: 1,
+  Wed: 2,
+  Thu: 3,
+  Fri: 4,
+  Sat: 5,
+  Sun: 6,
+};
 
 export interface OnlineFollowersHeatmap {
-  /** Average online followers per [weekday (Monday first)][UTC hour]. */
+  /**
+   * Average online followers per [weekday (Monday first)][hour], in
+   * {@link INSIGHTS_TIME_ZONE}. Meta reports these hours in the account's own
+   * time zone, so each value is resolved to a real instant before bucketing.
+   */
   grid: number[][];
+  /** Busiest and quietest cell, so callers can scale across the real range. */
   max: number;
+  min: number;
+}
+
+/** Places an instant on the heatmap grid in the audience time zone. */
+function getHeatmapSlot(instant: number): { day: number; hour: number } | null {
+  const parts = HEATMAP_SLOT_FORMATTER.formatToParts(new Date(instant));
+  const weekday = parts.find((part) => part.type === "weekday")?.value;
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  const day = weekday == null ? undefined : WEEKDAY_ROWS[weekday];
+  if (day == null || !Number.isInteger(hour) || hour < 0 || hour >= HOURS_PER_DAY) {
+    return null;
+  }
+  return { day, hour };
 }
 
 /** Averages Meta's per-day hourly online_followers maps into a week grid. */
@@ -393,16 +432,19 @@ export function getOnlineFollowersHeatmap(
         if (!Number.isFinite(endTime)) {
           continue;
         }
-        // end_time closes the measured day, so the hours belong to the day
-        // before it; shift Sunday-first getUTCDay to Monday-first rows.
-        const utcDay = new Date(endTime - MILLISECONDS_PER_DAY).getUTCDay();
-        const day = (utcDay + DAYS_PER_WEEK - 1) % DAYS_PER_WEEK;
+        // end_time is the account-local midnight that closes the measured
+        // day, so hour h of that day is exactly h hours after its start.
+        const dayStart = endTime - MILLISECONDS_PER_DAY;
         for (const [hourKey, hourValue] of Object.entries(point.value)) {
           const hour = Number(hourKey);
           const numeric = toNumber(hourValue);
-          if (Number.isInteger(hour) && hour >= 0 && hour < HOURS_PER_DAY && numeric != null) {
-            sums[day]![hour]! += numeric;
-            counts[day]![hour]! += 1;
+          if (!Number.isInteger(hour) || hour < 0 || hour >= HOURS_PER_DAY || numeric == null) {
+            continue;
+          }
+          const slot = getHeatmapSlot(dayStart + hour * MILLISECONDS_PER_HOUR);
+          if (slot) {
+            sums[slot.day]![slot.hour]! += numeric;
+            counts[slot.day]![slot.hour]! += 1;
           }
         }
       }
@@ -416,7 +458,8 @@ export function getOnlineFollowersHeatmap(
     }),
   );
   const max = Math.max(...grid.flat());
-  return max > 0 ? { grid, max } : null;
+  const min = Math.min(...grid.flat());
+  return max > 0 ? { grid, max, min } : null;
 }
 
 function toNumber(value: unknown): number | null {

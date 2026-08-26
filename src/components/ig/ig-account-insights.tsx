@@ -31,6 +31,7 @@ import {
   getAccountInsightSummary,
   getFollowsSplit,
   getOnlineFollowersHeatmap,
+  INSIGHTS_TIME_ZONE_LABEL,
   summarizeAccountInsights,
   type AccountInsightSlice,
   type AccountInsightSummary,
@@ -45,6 +46,11 @@ import {
   type MetaAccountInsightSummaryMetric,
 } from "@/lib/meta/constants";
 import { cn } from "@/lib/utils";
+
+interface HeatmapCell {
+  day: number;
+  hour: number;
+}
 
 interface IgAccountInsightsPanelProps {
   insights: IgAccountInsights[];
@@ -101,8 +107,17 @@ const MIN_CHART_POINTS = 2;
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000;
 const HEATMAP_DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 const HEATMAP_HOUR_TICKS = [0, 6, 12, 18] as const;
+const HOURS_IN_DAY = 24;
+/** Columns at each edge whose tooltip is aligned inward instead of centred. */
+const HEATMAP_EDGE_COLUMNS = 2;
 /** Cells stay faintly visible at zero so the week grid keeps its shape. */
 const HEATMAP_MIN_OPACITY = 0.08;
+/**
+ * Online-follower counts sit on a high all-day baseline with a comparatively
+ * small evening bump, so a linear ramp renders most of the day identically.
+ * Easing the scale keeps the ordering honest while separating the busy hours.
+ */
+const HEATMAP_CONTRAST_EXPONENT = 3;
 
 /**
  * Account-wide Meta insights for a selectable 15/30/90/180-day window:
@@ -142,8 +157,8 @@ export function IgAccountInsightsPanel({
       summary != null && summary.points.length >= MIN_CHART_POINTS,
   );
 
-  const windowStarts = selected
-    ? getWindowStarts(selected.period_end, selected.period_days)
+  const windowRanges = selected
+    ? getWindowRanges(selected.period_end, selected.period_days)
     : [];
   const heatmap = useMemo(
     () => (demographicsRow ? getOnlineFollowersHeatmap(demographicsRow.metrics) : null),
@@ -160,14 +175,14 @@ export function IgAccountInsightsPanel({
         <MetricWindowChartCard
           key={`windows-${metric}`}
           summary={summary}
-          windowStarts={windowStarts}
+          windowRanges={windowRanges}
         />,
       );
     }
   }
   const growthData = buildGrowthData(
     getAccountInsightSummary(summaries, "follows_and_unfollows"),
-    windowStarts,
+    windowRanges,
   );
   if (growthData.length > 1) {
     chartCards.push(<FollowerGrowthChartCard key="growth" data={growthData} />);
@@ -439,35 +454,70 @@ function MetricChartCard({ summary }: { summary: AccountInsightSummary }) {
   );
 }
 
-/** Oldest-first start dates of the ≤30-day fetch windows covering a range. */
-function getWindowStarts(periodEnd: string, periodDays: number): Date[] {
+interface WindowRange {
+  start: Date;
+  end: Date;
+}
+
+/** Oldest-first ≤30-day fetch windows covering a range. */
+function getWindowRanges(periodEnd: string, periodDays: number): WindowRange[] {
   const endMs = Date.parse(periodEnd);
   const startMs = endMs - periodDays * MILLISECONDS_PER_DAY;
   const windowMs = META_ACCOUNT_INSIGHT_WINDOW_DAYS * MILLISECONDS_PER_DAY;
-  const starts: Date[] = [];
+  const ranges: WindowRange[] = [];
   for (let end = endMs; end > startMs; end -= windowMs) {
-    starts.push(new Date(Math.max(startMs, end - windowMs)));
+    ranges.push({
+      start: new Date(Math.max(startMs, end - windowMs)),
+      end: new Date(end),
+    });
   }
-  return starts.reverse();
+  return ranges.reverse();
 }
 
-function formatWindowLabel(start: Date | undefined, index: number): string {
-  return start
-    ? start.toLocaleDateString(undefined, { month: "short", day: "numeric" })
-    : `#${index + 1}`;
+/** Axis label: only the months a window spans, e.g. "Feb–Mar". */
+function formatWindowLabel(range: WindowRange | undefined, index: number): string {
+  if (!range) {
+    return `#${index + 1}`;
+  }
+  const start = range.start.toLocaleDateString(undefined, { month: "short" });
+  const end = range.end.toLocaleDateString(undefined, { month: "short" });
+  return start === end ? start : `${start}–${end}`;
+}
+
+/** Exact window dates, kept for the tooltip where there is room for them. */
+function formatWindowRange(range: WindowRange | undefined): string | undefined {
+  if (!range) {
+    return undefined;
+  }
+  const format = (value: Date) =>
+    value.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${format(range.start)} – ${format(range.end)}`;
+}
+
+/** Reads the exact date range a hovered bar was built from. */
+function readWindowRange(
+  items: ReadonlyArray<{ payload?: unknown }>,
+): string | null {
+  const payload = items[0]?.payload;
+  if (typeof payload !== "object" || payload === null) {
+    return null;
+  }
+  const range = (payload as { range?: unknown }).range;
+  return typeof range === "string" ? range : null;
 }
 
 /** One bar per 30-day fetch window — the trend view for total-only metrics. */
 function MetricWindowChartCard({
   summary,
-  windowStarts,
+  windowRanges,
 }: {
   summary: AccountInsightSummary;
-  windowStarts: Date[];
+  windowRanges: WindowRange[];
 }) {
   const color = METRIC_COLORS[summary.metric] ?? "var(--chart-5)";
   const data = summary.windows.map((window, index) => ({
-    label: formatWindowLabel(windowStarts[index], index),
+    label: formatWindowLabel(windowRanges[index], index),
+    range: formatWindowRange(windowRanges[index]),
     value: window.total ?? 0,
   }));
 
@@ -489,7 +539,13 @@ function MetricWindowChartCard({
               width={44}
               tickFormatter={(value: number) => formatInsightNumber(value)}
             />
-            <ChartTooltip content={<ChartTooltipContent />} />
+            <ChartTooltip
+              content={
+                <ChartTooltipContent
+                  labelFormatter={(_value, items) => readWindowRange(items)}
+                />
+              }
+            />
             <Bar
               dataKey="value"
               fill="var(--color-value)"
@@ -505,13 +561,14 @@ function MetricWindowChartCard({
 
 interface GrowthDatum {
   label: string;
+  range: string | undefined;
   follows: number;
   unfollows: number;
 }
 
 function buildGrowthData(
   summary: AccountInsightSummary | null,
-  windowStarts: Date[],
+  windowRanges: WindowRange[],
 ): GrowthDatum[] {
   if (!summary || summary.windows.length < 2) {
     return [];
@@ -519,7 +576,8 @@ function buildGrowthData(
   const data = summary.windows.map((window, index) => {
     const split = getFollowsSplit(window.breakdowns);
     return {
-      label: formatWindowLabel(windowStarts[index], index),
+      label: formatWindowLabel(windowRanges[index], index),
+      range: formatWindowRange(windowRanges[index]),
       follows: split.follows ?? 0,
       // Losses plot below the zero line.
       unfollows: -(split.unfollows ?? 0),
@@ -556,7 +614,13 @@ function FollowerGrowthChartCard({ data }: { data: GrowthDatum[] }) {
               width={44}
               tickFormatter={(value: number) => formatInsightNumber(value)}
             />
-            <ChartTooltip content={<ChartTooltipContent />} />
+            <ChartTooltip
+              content={
+                <ChartTooltipContent
+                  labelFormatter={(_value, items) => readWindowRange(items)}
+                />
+              }
+            />
             <ChartLegend content={<ChartLegendContent />} />
             <Bar
               dataKey="follows"
@@ -579,17 +643,34 @@ function FollowerGrowthChartCard({ data }: { data: GrowthDatum[] }) {
   );
 }
 
+/**
+ * Scales a cell across the observed range rather than from zero: audiences
+ * keep a high all-day baseline, so a zero-based ramp would render nearly
+ * every hour at the same intensity.
+ */
+function getHeatmapOpacity(value: number, heatmap: OnlineFollowersHeatmap): number {
+  const span = heatmap.max - heatmap.min;
+  const share = span > 0 ? (value - heatmap.min) / span : 1;
+  return (
+    HEATMAP_MIN_OPACITY +
+    (1 - HEATMAP_MIN_OPACITY) * share ** HEATMAP_CONTRAST_EXPONENT
+  );
+}
+
 /** Hour-by-weekday presence heatmap from the trailing-month hourly data. */
 function OnlineFollowersCard({ heatmap }: { heatmap: OnlineFollowersHeatmap }) {
+  const [hovered, setHovered] = useState<HeatmapCell | null>(null);
+  const peaks = heatmap.grid.map(getBusiestHour);
+
   return (
     <Card className="gap-3">
       <CardHeader>
         <CardTitle className="text-base">When followers are online</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Average per hour (UTC) over the last 30 days
+          Average per hour · {INSIGHTS_TIME_ZONE_LABEL} · last 30 days
         </p>
       </CardHeader>
-      <CardContent className="space-y-1">
+      <CardContent className="space-y-1" onMouseLeave={() => setHovered(null)}>
         {heatmap.grid.map((row, day) => (
           <div key={HEATMAP_DAY_LABELS[day]} className="flex items-center gap-2">
             <span className="w-8 shrink-0 text-xs text-muted-foreground">
@@ -598,21 +679,32 @@ function OnlineFollowersCard({ heatmap }: { heatmap: OnlineFollowersHeatmap }) {
             <div
               className="grid flex-1 grid-cols-[repeat(24,minmax(0,1fr))] gap-0.5"
               role="img"
-              aria-label={`Online followers on ${HEATMAP_DAY_LABELS[day]}`}
+              aria-label={`${HEATMAP_DAY_LABELS[day]}: busiest at ${peaks[day]}:00, about ${formatInsightNumber(row[peaks[day]!] ?? 0)} followers online`}
             >
-              {row.map((value, hour) => (
-                <div
-                  key={hour}
-                  title={`${HEATMAP_DAY_LABELS[day]} ${hour}:00 · ~${Math.round(value)} online`}
-                  className="h-4 rounded-xs"
-                  style={{
-                    backgroundColor: "var(--chart-3)",
-                    opacity:
-                      HEATMAP_MIN_OPACITY +
-                      (1 - HEATMAP_MIN_OPACITY) * (value / heatmap.max),
-                  }}
-                />
-              ))}
+              {row.map((value, hour) => {
+                const isHovered = hovered?.day === day && hovered.hour === hour;
+                return (
+                  <div
+                    key={hour}
+                    className={cn(
+                      "relative h-4 rounded-xs",
+                      isHovered && "ring-2 ring-foreground/50",
+                    )}
+                    onMouseEnter={() => setHovered({ day, hour })}
+                  >
+                    <div
+                      className="absolute inset-0 rounded-xs"
+                      style={{
+                        backgroundColor: "var(--chart-3)",
+                        opacity: getHeatmapOpacity(value, heatmap),
+                      }}
+                    />
+                    {isHovered ? (
+                      <HeatmapTooltip day={day} hour={hour} value={value} />
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -630,6 +722,48 @@ function OnlineFollowersCard({ heatmap }: { heatmap: OnlineFollowersHeatmap }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/** Matches the chart tooltips, anchored to the hovered cell. */
+function HeatmapTooltip({
+  day,
+  hour,
+  value,
+}: HeatmapCell & { value: number }) {
+  return (
+    <div
+      role="tooltip"
+      className={cn(
+        "pointer-events-none absolute z-20 w-max rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl",
+        // The top row has no room above it, and the outermost columns would
+        // otherwise overflow the card.
+        day === 0 ? "top-full mt-1" : "bottom-full mb-1",
+        hour <= HEATMAP_EDGE_COLUMNS && "left-0",
+        hour >= HOURS_IN_DAY - 1 - HEATMAP_EDGE_COLUMNS && "right-0",
+        hour > HEATMAP_EDGE_COLUMNS &&
+          hour < HOURS_IN_DAY - 1 - HEATMAP_EDGE_COLUMNS &&
+          "left-1/2 -translate-x-1/2",
+      )}
+    >
+      <p className="font-medium">
+        {HEATMAP_DAY_LABELS[day]} {String(hour).padStart(2, "0")}:00
+      </p>
+      <p className="text-muted-foreground">
+        ~
+        <span className="font-mono font-medium tabular-nums text-foreground">
+          {Math.round(value).toLocaleString()}
+        </span>{" "}
+        online
+      </p>
+    </div>
+  );
+}
+
+function getBusiestHour(row: number[]): number {
+  return row.reduce(
+    (best, value, hour) => (value > (row[best] ?? 0) ? hour : best),
+    0,
   );
 }
 

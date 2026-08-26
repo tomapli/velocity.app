@@ -20,6 +20,21 @@ function makeRow(periodDays: number, metrics: Json): IgAccountInsights {
   };
 }
 
+/** Two Mondays of hourly data that average to 200 online at 18:00 Prague. */
+const ONLINE_FOLLOWERS_METRICS: Json = {
+  online_followers: {
+    time_series: [
+      {
+        name: "online_followers",
+        values: [
+          { end_time: "2026-08-18T07:00:00+0000", value: { "9": 100 } },
+          { end_time: "2026-08-25T07:00:00+0000", value: { "9": 300, "10": 50 } },
+        ],
+      },
+    ],
+  },
+};
+
 function makeViewsMetrics(total: number): Json {
   return { views: { total: [{ name: "views", total_value: { value: total } }] } };
 }
@@ -55,6 +70,33 @@ describe("IgAccountInsightsPanel", () => {
     );
 
     expect(screen.getByText("Likes")).toBeInTheDocument();
+  });
+
+  it("names the busiest hour of each day for assistive tech", () => {
+    render(
+      <IgAccountInsightsPanel insights={[makeRow(180, ONLINE_FOLLOWERS_METRICS)]} />,
+    );
+
+    expect(
+      screen.getByRole("img", { name: /Mon: busiest at 18:00, about 200/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows an exact reading when a heatmap cell is hovered", async () => {
+    const user = userEvent.setup();
+    render(
+      <IgAccountInsightsPanel insights={[makeRow(180, ONLINE_FOLLOWERS_METRICS)]} />,
+    );
+
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    // Cells sit in hour order inside their weekday row.
+    const monday = screen.getByRole("img", { name: /^Mon:/ });
+    await user.hover(monday.children[18] as HTMLElement);
+
+    const tooltip = screen.getByRole("tooltip");
+    expect(tooltip).toHaveTextContent("Mon 18:00");
+    expect(tooltip).toHaveTextContent("200");
   });
 
   it("explains a range that has no snapshot yet", async () => {

@@ -6,6 +6,7 @@ import {
   getOnlineFollowersHeatmap,
   summarizeAccountInsights,
 } from "@/lib/ig/account-insights";
+import type { Json } from "@/lib/supabase/database.types";
 
 describe("summarizeAccountInsights", () => {
   const summaries = summarizeAccountInsights({
@@ -214,28 +215,36 @@ describe("summarizeAccountInsights", () => {
 });
 
 describe("getOnlineFollowersHeatmap", () => {
-  it("averages hourly maps into a Monday-first week grid", () => {
-    // end_time closes the measured day: these points describe Monday
-    // 2026-08-17 and the following Monday, hour 9 UTC.
-    const heatmap = getOnlineFollowersHeatmap({
-      online_followers: {
-        time_series: [
-          {
-            name: "online_followers",
-            values: [
-              { end_time: "2026-08-18T07:00:00+0000", value: { "9": 100 } },
-              { end_time: "2026-08-25T07:00:00+0000", value: { "9": 300, "10": 50 } },
-            ],
-          },
-        ],
-      },
-    });
+  // This account's day closes at 07:00 UTC, i.e. its local midnight — so
+  // hour 9 of the measured day is 16:00 UTC, which is 18:00 in Prague (CEST)
+  // during summer and 17:00 (CET) in winter.
+  const buildMetrics = (values: Json[]) => ({
+    online_followers: { time_series: [{ name: "online_followers", values }] },
+  });
+
+  it("buckets account-local hours into Prague weekdays and hours", () => {
+    const heatmap = getOnlineFollowersHeatmap(
+      buildMetrics([
+        { end_time: "2026-08-18T07:00:00+0000", value: { "9": 100 } },
+        { end_time: "2026-08-25T07:00:00+0000", value: { "9": 300, "10": 50 } },
+      ]),
+    );
 
     expect(heatmap).not.toBeNull();
-    expect(heatmap!.grid[0]![9]).toBe(200);
-    expect(heatmap!.grid[0]![10]).toBe(50);
-    expect(heatmap!.grid[3]![9]).toBe(0);
+    // Both samples land on Monday 18:00 Prague and are averaged.
+    expect(heatmap!.grid[0]![18]).toBe(200);
+    expect(heatmap!.grid[0]![19]).toBe(50);
+    expect(heatmap!.grid[3]![18]).toBe(0);
     expect(heatmap!.max).toBe(200);
+  });
+
+  it("follows Prague daylight saving across the year", () => {
+    const winter = getOnlineFollowersHeatmap(
+      buildMetrics([{ end_time: "2026-01-20T07:00:00+0000", value: { "9": 60 } }]),
+    );
+
+    expect(winter!.grid[0]![17]).toBe(60);
+    expect(winter!.grid[0]![18]).toBe(0);
   });
 
   it("returns null without any hourly data", () => {
