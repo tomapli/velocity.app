@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
-import { Area, AreaChart, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, XAxis, YAxis } from "recharts";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
@@ -27,13 +29,17 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   formatInsightNumber,
   getAccountInsightSummary,
+  getFollowsSplit,
+  getOnlineFollowersHeatmap,
   summarizeAccountInsights,
   type AccountInsightSlice,
   type AccountInsightSummary,
+  type OnlineFollowersHeatmap,
 } from "@/lib/ig/account-insights";
 import type { IgAccountInsights } from "@/lib/ig/queries";
 import {
   META_ACCOUNT_INSIGHT_RANGES_DAYS,
+  META_ACCOUNT_INSIGHT_WINDOW_DAYS,
   META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
   type MetaAccountInsightRangeDays,
   type MetaAccountInsightSummaryMetric,
@@ -85,10 +91,18 @@ const METRIC_COLORS: Partial<Record<MetaAccountInsightSummaryMetric, string>> = 
   total_interactions: "var(--chart-5)",
 };
 
+/** Metrics that get a per-window trend chart on chunked (90/180-day) ranges. */
+const WINDOW_CHART_METRICS = ["views", "total_interactions"] as const;
+
 const SPLIT_SLICE_OPACITIES = [1, 0.55, 0.3, 0.18] as const;
 const SPLIT_LEGEND_SLICES = 3;
 const DEMOGRAPHIC_SLICES = 5;
 const MIN_CHART_POINTS = 2;
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000;
+const HEATMAP_DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+const HEATMAP_HOUR_TICKS = [0, 6, 12, 18] as const;
+/** Cells stay faintly visible at zero so the week grid keeps its shape. */
+const HEATMAP_MIN_OPACITY = 0.08;
 
 /**
  * Account-wide Meta insights for a selectable 15/30/90/180-day window:
@@ -127,6 +141,40 @@ export function IgAccountInsightsPanel({
     (summary): summary is AccountInsightSummary =>
       summary != null && summary.points.length >= MIN_CHART_POINTS,
   );
+
+  const windowStarts = selected
+    ? getWindowStarts(selected.period_end, selected.period_days)
+    : [];
+  const heatmap = useMemo(
+    () => (demographicsRow ? getOnlineFollowersHeatmap(demographicsRow.metrics) : null),
+    [demographicsRow],
+  );
+
+  const chartCards: ReactNode[] = chartSummaries.map((summary) => (
+    <MetricChartCard key={`daily-${summary.metric}`} summary={summary} />
+  ));
+  for (const metric of WINDOW_CHART_METRICS) {
+    const summary = getAccountInsightSummary(summaries, metric);
+    if (summary && summary.windows.length > 1 && summary.windows.some((window) => window.total != null)) {
+      chartCards.push(
+        <MetricWindowChartCard
+          key={`windows-${metric}`}
+          summary={summary}
+          windowStarts={windowStarts}
+        />,
+      );
+    }
+  }
+  const growthData = buildGrowthData(
+    getAccountInsightSummary(summaries, "follows_and_unfollows"),
+    windowStarts,
+  );
+  if (growthData.length > 1) {
+    chartCards.push(<FollowerGrowthChartCard key="growth" data={growthData} />);
+  }
+  if (heatmap) {
+    chartCards.push(<OnlineFollowersCard key="online-followers" heatmap={heatmap} />);
+  }
 
   return (
     <section className="space-y-4" aria-labelledby="account-insights-title">
@@ -190,16 +238,11 @@ export function IgAccountInsightsPanel({
             })}
           </div>
 
-          {chartSummaries.length > 0 ? (
+          {chartCards.length > 0 ? (
             <div
-              className={cn(
-                "grid gap-3",
-                chartSummaries.length > 1 && "lg:grid-cols-2",
-              )}
+              className={cn("grid gap-3", chartCards.length > 1 && "lg:grid-cols-2")}
             >
-              {chartSummaries.map((summary) => (
-                <MetricChartCard key={summary.metric} summary={summary} />
-              ))}
+              {chartCards}
             </div>
           ) : null}
 
@@ -251,7 +294,8 @@ export function IgAccountInsightsPanel({
 
 function HeroMetricCard({ summary }: { summary: AccountInsightSummary }) {
   const color = METRIC_COLORS[summary.metric] ?? "var(--chart-5)";
-  const slices = Object.values(summary.breakdowns)[0] ?? [];
+  const isGrowth = summary.metric === "follows_and_unfollows";
+  const slices = isGrowth ? [] : Object.values(summary.breakdowns)[0] ?? [];
 
   return (
     <Card className="gap-3 py-4">
@@ -262,11 +306,40 @@ function HeroMetricCard({ summary }: { summary: AccountInsightSummary }) {
       </CardHeader>
       <CardContent className="space-y-3 px-4">
         <p className="font-heading text-2xl tabular-nums">
-          {summary.total == null ? "—" : formatInsightNumber(summary.total)}
+          {summary.total == null ? "—" : summary.displayValue}
         </p>
+        {isGrowth ? <FollowsBreakdown summary={summary} /> : null}
         {slices.length > 0 ? <MetricSplit slices={slices} color={color} /> : null}
       </CardContent>
     </Card>
+  );
+}
+
+/** Follower gains and losses; a parts-of-whole split would misread this metric. */
+function FollowsBreakdown({ summary }: { summary: AccountInsightSummary }) {
+  const split = getFollowsSplit(summary.breakdowns);
+  if (split.follows == null && split.unfollows == null) {
+    return null;
+  }
+  return (
+    <ul className="space-y-1 text-xs tabular-nums">
+      {split.follows != null ? (
+        <li className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground">Follows</span>
+          <span className="text-success-strong">
+            +{formatInsightNumber(split.follows)}
+          </span>
+        </li>
+      ) : null}
+      {split.unfollows != null ? (
+        <li className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground">Unfollows</span>
+          <span className="text-destructive">
+            −{formatInsightNumber(split.unfollows)}
+          </span>
+        </li>
+      ) : null}
+    </ul>
   );
 }
 
@@ -361,6 +434,200 @@ function MetricChartCard({ summary }: { summary: AccountInsightSummary }) {
             />
           </AreaChart>
         </ChartContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Oldest-first start dates of the ≤30-day fetch windows covering a range. */
+function getWindowStarts(periodEnd: string, periodDays: number): Date[] {
+  const endMs = Date.parse(periodEnd);
+  const startMs = endMs - periodDays * MILLISECONDS_PER_DAY;
+  const windowMs = META_ACCOUNT_INSIGHT_WINDOW_DAYS * MILLISECONDS_PER_DAY;
+  const starts: Date[] = [];
+  for (let end = endMs; end > startMs; end -= windowMs) {
+    starts.push(new Date(Math.max(startMs, end - windowMs)));
+  }
+  return starts.reverse();
+}
+
+function formatWindowLabel(start: Date | undefined, index: number): string {
+  return start
+    ? start.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : `#${index + 1}`;
+}
+
+/** One bar per 30-day fetch window — the trend view for total-only metrics. */
+function MetricWindowChartCard({
+  summary,
+  windowStarts,
+}: {
+  summary: AccountInsightSummary;
+  windowStarts: Date[];
+}) {
+  const color = METRIC_COLORS[summary.metric] ?? "var(--chart-5)";
+  const data = summary.windows.map((window, index) => ({
+    label: formatWindowLabel(windowStarts[index], index),
+    value: window.total ?? 0,
+  }));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{summary.label} per 30 days</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ChartContainer
+          config={{ value: { label: summary.label, color } }}
+          className="h-56 w-full"
+        >
+          <BarChart data={data} accessibilityLayer margin={{ left: 0, right: 8 }}>
+            <XAxis dataKey="label" tickLine={false} axisLine={false} />
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              width={44}
+              tickFormatter={(value: number) => formatInsightNumber(value)}
+            />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar
+              dataKey="value"
+              fill="var(--color-value)"
+              radius={[4, 4, 0, 0]}
+              maxBarSize={48}
+            />
+          </BarChart>
+        </ChartContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface GrowthDatum {
+  label: string;
+  follows: number;
+  unfollows: number;
+}
+
+function buildGrowthData(
+  summary: AccountInsightSummary | null,
+  windowStarts: Date[],
+): GrowthDatum[] {
+  if (!summary || summary.windows.length < 2) {
+    return [];
+  }
+  const data = summary.windows.map((window, index) => {
+    const split = getFollowsSplit(window.breakdowns);
+    return {
+      label: formatWindowLabel(windowStarts[index], index),
+      follows: split.follows ?? 0,
+      // Losses plot below the zero line.
+      unfollows: -(split.unfollows ?? 0),
+    };
+  });
+  return data.some((row) => row.follows !== 0 || row.unfollows !== 0) ? data : [];
+}
+
+/** Diverging gains/losses bars per 30-day window. */
+function FollowerGrowthChartCard({ data }: { data: GrowthDatum[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Follower growth per 30 days</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ChartContainer
+          config={{
+            follows: { label: "Follows", color: "var(--success)" },
+            unfollows: { label: "Unfollows", color: "var(--destructive)" },
+          }}
+          className="h-56 w-full"
+        >
+          <BarChart
+            data={data}
+            accessibilityLayer
+            stackOffset="sign"
+            margin={{ left: 0, right: 8 }}
+          >
+            <XAxis dataKey="label" tickLine={false} axisLine={false} />
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              width={44}
+              tickFormatter={(value: number) => formatInsightNumber(value)}
+            />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <ChartLegend content={<ChartLegendContent />} />
+            <Bar
+              dataKey="follows"
+              stackId="growth"
+              fill="var(--color-follows)"
+              radius={[4, 4, 0, 0]}
+              maxBarSize={48}
+            />
+            <Bar
+              dataKey="unfollows"
+              stackId="growth"
+              fill="var(--color-unfollows)"
+              radius={[0, 0, 4, 4]}
+              maxBarSize={48}
+            />
+          </BarChart>
+        </ChartContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Hour-by-weekday presence heatmap from the trailing-month hourly data. */
+function OnlineFollowersCard({ heatmap }: { heatmap: OnlineFollowersHeatmap }) {
+  return (
+    <Card className="gap-3">
+      <CardHeader>
+        <CardTitle className="text-base">When followers are online</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Average per hour (UTC) over the last 30 days
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-1">
+        {heatmap.grid.map((row, day) => (
+          <div key={HEATMAP_DAY_LABELS[day]} className="flex items-center gap-2">
+            <span className="w-8 shrink-0 text-xs text-muted-foreground">
+              {HEATMAP_DAY_LABELS[day]}
+            </span>
+            <div
+              className="grid flex-1 grid-cols-[repeat(24,minmax(0,1fr))] gap-0.5"
+              role="img"
+              aria-label={`Online followers on ${HEATMAP_DAY_LABELS[day]}`}
+            >
+              {row.map((value, hour) => (
+                <div
+                  key={hour}
+                  title={`${HEATMAP_DAY_LABELS[day]} ${hour}:00 · ~${Math.round(value)} online`}
+                  className="h-4 rounded-xs"
+                  style={{
+                    backgroundColor: "var(--chart-3)",
+                    opacity:
+                      HEATMAP_MIN_OPACITY +
+                      (1 - HEATMAP_MIN_OPACITY) * (value / heatmap.max),
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="flex items-center gap-2 pt-1">
+          <span className="w-8 shrink-0" aria-hidden />
+          <div className="grid flex-1 grid-cols-[repeat(24,minmax(0,1fr))] gap-0.5 text-[10px] text-muted-foreground">
+            {Array.from({ length: 24 }, (_, hour) => (
+              <span key={hour} className="text-center">
+                {HEATMAP_HOUR_TICKS.includes(hour as (typeof HEATMAP_HOUR_TICKS)[number])
+                  ? hour
+                  : ""}
+              </span>
+            ))}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

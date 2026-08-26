@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { unmemoizedFetch } from "./unmemoized-fetch";
 import type { Database } from "./database.types";
 
 /**
@@ -14,6 +15,9 @@ export async function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
+      global: {
+        fetch: unmemoizedFetch,
+      },
       cookies: {
         getAll() {
           return cookieStore.getAll();

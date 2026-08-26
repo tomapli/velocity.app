@@ -7,6 +7,8 @@ export const META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS = 180;
 export const META_ACCOUNT_INSIGHTS_MAX_DAYS = 180;
 /** Meta only serves the follower_count day series for the trailing month. */
 export const META_FOLLOWER_COUNT_MAX_RANGE_DAYS = 30;
+/** Meta only serves hourly online_followers data for the trailing month. */
+export const META_ONLINE_FOLLOWERS_MAX_RANGE_DAYS = 30;
 /** Meta rejects day-period insight queries spanning more than ~30 days. */
 export const META_ACCOUNT_INSIGHT_WINDOW_DAYS = 30;
 /** Minimum age of the last finished Meta run before a page open re-scrapes. */
@@ -42,6 +44,7 @@ export const META_ACCOUNT_INSIGHT_METRICS = [
   "reposts",
   "follows_and_unfollows",
   "profile_links_taps",
+  "online_followers",
   "follower_demographics",
   "engaged_audience_demographics",
 ] as const;

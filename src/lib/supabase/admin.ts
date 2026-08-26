@@ -1,10 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
+import { unmemoizedFetch } from "./unmemoized-fetch";
 import type { Database } from "./database.types";
 
 /**
  * Creates a Supabase client with service role key
  * This client bypasses RLS and should only be used for system operations
- * 
+ *
  * WARNING: Never expose this client to the browser!
  */
 export function createAdminClient() {
@@ -19,6 +20,9 @@ export function createAdminClient() {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+    },
+    global: {
+      fetch: unmemoizedFetch,
     },
   });
 }

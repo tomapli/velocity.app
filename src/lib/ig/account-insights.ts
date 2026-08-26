@@ -19,8 +19,9 @@ export const META_ACCOUNT_INSIGHT_LABELS: Record<
   saves: "Saves",
   replies: "Replies",
   reposts: "Reposts",
-  follows_and_unfollows: "Follows and unfollows",
+  follows_and_unfollows: "Follower growth",
   profile_links_taps: "Profile link taps",
+  online_followers: "Online followers",
   follower_demographics: "Follower demographics",
   engaged_audience_demographics: "Engaged audience demographics",
 };
@@ -50,6 +51,17 @@ export interface AccountInsightSlice {
   value: number;
 }
 
+export interface AccountInsightWindow {
+  total: number | null;
+  breakdowns: Record<string, AccountInsightSlice[]>;
+}
+
+export interface AccountInsightFollowsSplit {
+  follows: number | null;
+  unfollows: number | null;
+  net: number | null;
+}
+
 export interface AccountInsightSummary {
   metric: MetaAccountInsightSummaryMetric;
   label: string;
@@ -59,6 +71,8 @@ export interface AccountInsightSummary {
   points: AccountInsightPoint[];
   /** Value splits keyed by breakdown name, largest slice first. */
   breakdowns: Record<string, AccountInsightSlice[]>;
+  /** Per-chunk values for ranges fetched in windows, oldest first. */
+  windows: AccountInsightWindow[];
 }
 
 const NUMBER_FORMATTER = new Intl.NumberFormat("en", {
@@ -94,7 +108,14 @@ function summarizeMetric(
   const points = sortPoints(extractPoints(collectByKey(raw, TIME_SERIES_KEY_PATTERN)));
   const breakdowns = extractBreakdowns(raw);
   const windowed = isWindowed(raw);
-  const total = extractTotal(raw) ?? points.at(-1)?.value ?? null;
+  // Meta returns the follows_and_unfollows total request without a value;
+  // the net change has to be derived from the follow_type breakdown.
+  const signed = metric === "follows_and_unfollows";
+  const total =
+    extractTotal(raw) ??
+    (signed ? getFollowsSplit(breakdowns).net : null) ??
+    points.at(-1)?.value ??
+    null;
   const approximate = windowed && NON_ADDITIVE_METRICS.has(metric);
   return {
     metric,
@@ -103,10 +124,35 @@ function summarizeMetric(
     displayValue:
       total == null
         ? formatStructuredValue(breakdowns)
-        : `${approximate ? "~" : ""}${NUMBER_FORMATTER.format(total)}`,
+        : `${approximate ? "~" : ""}${signed && total > 0 ? "+" : ""}${NUMBER_FORMATTER.format(total)}`,
     points,
     breakdowns,
+    windows: extractWindows(raw),
   };
+}
+
+/**
+ * Reads follower gains and losses from the follow_type breakdown, whose
+ * dimension values are FOLLOWER (accounts that followed) and NON_FOLLOWER
+ * (accounts that unfollowed).
+ */
+export function getFollowsSplit(
+  breakdowns: Record<string, AccountInsightSlice[]>,
+): AccountInsightFollowsSplit {
+  let follows: number | null = null;
+  let unfollows: number | null = null;
+  for (const slice of breakdowns.follow_type ?? []) {
+    const label = slice.label.toLowerCase();
+    if (label === "non follower" || label === "unfollows") {
+      unfollows = (unfollows ?? 0) + slice.value;
+    } else if (label === "follower" || label === "follows") {
+      follows = (follows ?? 0) + slice.value;
+    }
+  }
+  if (follows == null && unfollows == null) {
+    return { follows: null, unfollows: null, net: null };
+  }
+  return { follows, unfollows, net: (follows ?? 0) - (unfollows ?? 0) };
 }
 
 /**
@@ -120,23 +166,65 @@ function extractTotal(raw: unknown): number | null {
   }
   let sum: number | null = null;
   for (const insights of collectByKey(raw, TOTAL_KEY_PATTERN)) {
-    if (!Array.isArray(insights)) {
-      continue;
-    }
-    for (const insight of insights) {
-      if (!isRecord(insight)) {
-        continue;
-      }
-      const totalValue = isRecord(insight.total_value)
-        ? insight.total_value.value
-        : undefined;
-      if (typeof totalValue === "number" && Number.isFinite(totalValue)) {
-        sum = (sum ?? 0) + totalValue;
-        break;
-      }
+    const totalValue = firstNumericTotal(insights);
+    if (totalValue != null) {
+      sum = (sum ?? 0) + totalValue;
     }
   }
   return sum;
+}
+
+function firstNumericTotal(insights: unknown): number | null {
+  if (!Array.isArray(insights)) {
+    return null;
+  }
+  for (const insight of insights) {
+    if (!isRecord(insight)) {
+      continue;
+    }
+    const totalValue = isRecord(insight.total_value)
+      ? insight.total_value.value
+      : undefined;
+    if (typeof totalValue === "number" && Number.isFinite(totalValue)) {
+      return totalValue;
+    }
+  }
+  return null;
+}
+
+/** Splits chunked storage keys back into ordered per-window values. */
+function extractWindows(raw: unknown): AccountInsightWindow[] {
+  if (!isRecord(raw)) {
+    return [];
+  }
+  const entries = Object.entries(raw).flatMap(([key, value]) => {
+    const suffix = WINDOW_SUFFIX_PATTERN.exec(key);
+    return suffix ? [{ key, value, index: Number(suffix[0].slice(1)) }] : [];
+  });
+  if (entries.length === 0) {
+    return [];
+  }
+  const count = Math.max(...entries.map((entry) => entry.index)) + 1;
+  return Array.from({ length: count }, (_, index) => {
+    const breakdowns: Record<string, AccountInsightSlice[]> = {};
+    let total: number | null = null;
+    for (const entry of entries) {
+      if (entry.index !== index || !Array.isArray(entry.value)) {
+        continue;
+      }
+      if (TOTAL_KEY_PATTERN.test(entry.key)) {
+        total = firstNumericTotal(entry.value);
+        continue;
+      }
+      if (entry.key.startsWith(BREAKDOWN_KEY_PREFIX)) {
+        const slices = extractSlices(entry.value);
+        if (slices.length > 0) {
+          breakdowns[normalizeBreakdownKey(entry.key)] = slices;
+        }
+      }
+    }
+    return { total, breakdowns };
+  });
 }
 
 function collectByKey(raw: unknown, pattern: RegExp): unknown[] {
@@ -267,6 +355,68 @@ function sortPoints(points: AccountInsightPoint[]): AccountInsightPoint[] {
   return [...byTimestamp.values()].sort((left, right) =>
     left.timestamp.localeCompare(right.timestamp),
   );
+}
+
+const DAYS_PER_WEEK = 7;
+const HOURS_PER_DAY = 24;
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000;
+
+export interface OnlineFollowersHeatmap {
+  /** Average online followers per [weekday (Monday first)][UTC hour]. */
+  grid: number[][];
+  max: number;
+}
+
+/** Averages Meta's per-day hourly online_followers maps into a week grid. */
+export function getOnlineFollowersHeatmap(
+  metrics: Json,
+): OnlineFollowersHeatmap | null {
+  const record = isRecord(metrics) ? metrics : {};
+  const makeGrid = () =>
+    Array.from({ length: DAYS_PER_WEEK }, () => new Array<number>(HOURS_PER_DAY).fill(0));
+  const sums = makeGrid();
+  const counts = makeGrid();
+
+  for (const insights of collectByKey(record.online_followers, TIME_SERIES_KEY_PATTERN)) {
+    if (!Array.isArray(insights)) {
+      continue;
+    }
+    for (const insight of insights) {
+      if (!isRecord(insight) || !Array.isArray(insight.values)) {
+        continue;
+      }
+      for (const point of insight.values) {
+        if (!isRecord(point) || typeof point.end_time !== "string" || !isRecord(point.value)) {
+          continue;
+        }
+        const endTime = Date.parse(point.end_time);
+        if (!Number.isFinite(endTime)) {
+          continue;
+        }
+        // end_time closes the measured day, so the hours belong to the day
+        // before it; shift Sunday-first getUTCDay to Monday-first rows.
+        const utcDay = new Date(endTime - MILLISECONDS_PER_DAY).getUTCDay();
+        const day = (utcDay + DAYS_PER_WEEK - 1) % DAYS_PER_WEEK;
+        for (const [hourKey, hourValue] of Object.entries(point.value)) {
+          const hour = Number(hourKey);
+          const numeric = toNumber(hourValue);
+          if (Number.isInteger(hour) && hour >= 0 && hour < HOURS_PER_DAY && numeric != null) {
+            sums[day]![hour]! += numeric;
+            counts[day]![hour]! += 1;
+          }
+        }
+      }
+    }
+  }
+
+  const grid = sums.map((row, day) =>
+    row.map((sum, hour) => {
+      const count = counts[day]![hour]!;
+      return count > 0 ? sum / count : 0;
+    }),
+  );
+  const max = Math.max(...grid.flat());
+  return max > 0 ? { grid, max } : null;
 }
 
 function toNumber(value: unknown): number | null {

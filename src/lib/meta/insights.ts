@@ -5,6 +5,7 @@ import {
   META_ACCOUNT_INSIGHT_WINDOW_DAYS,
   META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
   META_FOLLOWER_COUNT_MAX_RANGE_DAYS,
+  META_ONLINE_FOLLOWERS_MAX_RANGE_DAYS,
   type MetaAccountInsightMetric,
   type MetaAccountInsightRangeDays,
   type MetaAccountInsightSummaryMetric,
@@ -35,10 +36,21 @@ export interface MetaAccountInsightStep {
 }
 
 /**
+ * Metrics whose data does not depend on the requested range (demographic
+ * snapshots and the trailing-month online_followers series): fetched once,
+ * stored on the default-range row, and never chunked into windows.
+ */
+export function isRangeIndependentInsightMetric(
+  metric: MetaAccountInsightSummaryMetric,
+): boolean {
+  return metric.endsWith("_demographics") || metric === "online_followers";
+}
+
+/**
  * Flat, ordered list of every account-insight fetch: one step per metric per
  * range window, widest (default) range first so the default view fills first.
- * Demographics are range-independent and fetched once, with the default range;
- * the follower_count day series only exists for the trailing 30 days.
+ * Range-independent metrics are fetched once, with the default range; the
+ * follower_count day series only exists for the trailing 30 days.
  */
 export function getMetaAccountInsightSteps(): MetaAccountInsightStep[] {
   const ranges = [...META_ACCOUNT_INSIGHT_RANGES_DAYS].sort(
@@ -47,7 +59,7 @@ export function getMetaAccountInsightSteps(): MetaAccountInsightStep[] {
   return ranges.flatMap((rangeDays) => {
     const steps: MetaAccountInsightStep[] = META_ACCOUNT_INSIGHT_METRICS.filter(
       (metric) =>
-        !metric.endsWith("_demographics") ||
+        !isRangeIndependentInsightMetric(metric) ||
         rangeDays === META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
     ).map((metric) => ({ metric, rangeDays }));
     if (rangeDays <= META_FOLLOWER_COUNT_MAX_RANGE_DAYS) {
@@ -93,7 +105,7 @@ export function getMetaAccountInsightWindowedRequests(
   since: number,
   until: number,
 ): MetaAccountInsightRequest[] {
-  if (metric.endsWith("_demographics")) {
+  if (isRangeIndependentInsightMetric(metric)) {
     return getMetaAccountInsightRequests(metric, since, until);
   }
   const windows = splitMetaInsightWindow(since, until);
@@ -119,6 +131,23 @@ export function getMetaAccountInsightRequests(
       {
         key: "time_series",
         query: { period: "day", since: String(since), until: String(until) },
+      },
+    ];
+  }
+  if (metric === "online_followers") {
+    // Hourly presence maps per day, only served for the trailing month.
+    const clampedSince = Math.max(
+      since,
+      until - META_ONLINE_FOLLOWERS_MAX_RANGE_DAYS * SECONDS_PER_DAY,
+    );
+    return [
+      {
+        key: "time_series",
+        query: {
+          period: "lifetime",
+          since: String(clampedSince),
+          until: String(until),
+        },
       },
     ];
   }

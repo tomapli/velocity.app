@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   getAccountInsightSummary,
+  getFollowsSplit,
+  getOnlineFollowersHeatmap,
   summarizeAccountInsights,
 } from "@/lib/ig/account-insights";
 
@@ -50,7 +52,7 @@ describe("summarizeAccountInsights", () => {
   });
 
   it("keeps every summary metric visible and unavailable values explicit", () => {
-    expect(summaries).toHaveLength(15);
+    expect(summaries).toHaveLength(16);
     expect(
       getAccountInsightSummary(summaries, "profile_links_taps"),
     ).toMatchObject({ total: null, displayValue: "Not provided" });
@@ -91,6 +93,71 @@ describe("summarizeAccountInsights", () => {
     expect(getAccountInsightSummary(snapshotOnly, "follower_count")).toMatchObject(
       { total: 4_200 },
     );
+  });
+
+  it("derives signed follower growth from the follow_type breakdown", () => {
+    // Meta returns the follows_and_unfollows total request without a value.
+    const withGrowth = summarizeAccountInsights({
+      follows_and_unfollows: {
+        total: [{ name: "follows_and_unfollows", period: "day" }],
+        breakdown_follow_type: [
+          {
+            total_value: {
+              breakdowns: [
+                {
+                  dimension_keys: ["follow_type"],
+                  results: [
+                    { dimension_values: ["FOLLOWER"], value: 1_460 },
+                    { dimension_values: ["NON_FOLLOWER"], value: 185 },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    const summary = getAccountInsightSummary(withGrowth, "follows_and_unfollows");
+    expect(summary).toMatchObject({ total: 1_275, displayValue: "+1.3K" });
+    expect(getFollowsSplit(summary!.breakdowns)).toEqual({
+      follows: 1_460,
+      unfollows: 185,
+      net: 1_275,
+    });
+  });
+
+  it("exposes ordered per-window totals and breakdowns for chunked ranges", () => {
+    const windowed = summarizeAccountInsights({
+      follows_and_unfollows: {
+        total_0: [{ name: "follows_and_unfollows" }],
+        total_1: [{ name: "follows_and_unfollows" }],
+        breakdown_follow_type_0: [
+          {
+            total_value: {
+              breakdowns: [
+                { results: [{ dimension_values: ["FOLLOWER"], value: 10 }] },
+              ],
+            },
+          },
+        ],
+        breakdown_follow_type_1: [
+          {
+            total_value: {
+              breakdowns: [
+                { results: [{ dimension_values: ["NON_FOLLOWER"], value: 4 }] },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    const windows = getAccountInsightSummary(windowed, "follows_and_unfollows")!
+      .windows;
+    expect(windows).toHaveLength(2);
+    expect(getFollowsSplit(windows[0]!.breakdowns)).toMatchObject({ follows: 10 });
+    expect(getFollowsSplit(windows[1]!.breakdowns)).toMatchObject({ unfollows: 4 });
   });
 
   it("aggregates chunked windows: summed totals, merged breakdowns, stitched series", () => {
@@ -143,5 +210,36 @@ describe("summarizeAccountInsights", () => {
         { timestamp: "2026-08-01T00:00:00Z", value: 30 },
       ],
     });
+  });
+});
+
+describe("getOnlineFollowersHeatmap", () => {
+  it("averages hourly maps into a Monday-first week grid", () => {
+    // end_time closes the measured day: these points describe Monday
+    // 2026-08-17 and the following Monday, hour 9 UTC.
+    const heatmap = getOnlineFollowersHeatmap({
+      online_followers: {
+        time_series: [
+          {
+            name: "online_followers",
+            values: [
+              { end_time: "2026-08-18T07:00:00+0000", value: { "9": 100 } },
+              { end_time: "2026-08-25T07:00:00+0000", value: { "9": 300, "10": 50 } },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(heatmap).not.toBeNull();
+    expect(heatmap!.grid[0]![9]).toBe(200);
+    expect(heatmap!.grid[0]![10]).toBe(50);
+    expect(heatmap!.grid[3]![9]).toBe(0);
+    expect(heatmap!.max).toBe(200);
+  });
+
+  it("returns null without any hourly data", () => {
+    expect(getOnlineFollowersHeatmap({ online_followers: [] })).toBeNull();
+    expect(getOnlineFollowersHeatmap({})).toBeNull();
   });
 });

@@ -57,6 +57,7 @@ describe("getMetaAccountInsightRequests", () => {
       "reposts",
       "follows_and_unfollows",
       "profile_links_taps",
+      "online_followers",
       "follower_demographics",
       "engaged_audience_demographics",
     ]);
@@ -156,6 +157,22 @@ describe("getMetaAccountInsightRequests", () => {
       getMetaAccountInsightRequests("profile_links_taps", since, until).at(-1)
         ?.query.breakdown,
     ).toBe("contact_button_type");
+  });
+
+  it("requests the trailing-month hourly series for online_followers", () => {
+    const wideSince = until - 180 * SECONDS_PER_DAY;
+    expect(
+      getMetaAccountInsightRequests("online_followers", wideSince, until),
+    ).toEqual([
+      {
+        key: "time_series",
+        query: {
+          period: "lifetime",
+          since: String(until - 30 * SECONDS_PER_DAY),
+          until: String(until),
+        },
+      },
+    ]);
   });
 
   it("requests the legacy day series for follower_count", () => {
@@ -272,8 +289,8 @@ describe("getMetaAccountInsightSteps", () => {
         .filter((step) => step.rangeDays === rangeDays)
         .map((step) => step.metric);
       for (const metric of META_ACCOUNT_INSIGHT_METRICS) {
-        if (metric.endsWith("_demographics")) {
-          // Demographics are range-independent: fetched once, on the default.
+        if (metric.endsWith("_demographics") || metric === "online_followers") {
+          // Range-independent metrics are fetched once, on the default range.
           expect(metrics.includes(metric)).toBe(
             rangeDays === META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
           );
