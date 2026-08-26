@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { META_ACCOUNT_INSIGHTS_DAYS } from "@/lib/meta/constants";
+import { META_ACCOUNT_INSIGHTS_MAX_DAYS } from "@/lib/meta/constants";
 import type { Json } from "@/lib/supabase/database.types";
 
 const HOURS_PER_DAY = 24;
@@ -23,6 +23,9 @@ export const MetaScrapeStateSchema = z.object({
   period_end: z.string().datetime({ offset: true }),
   attempts: z.number().int().nonnegative(),
   last_error: z.string().nullable(),
+  // Distinguishes queue idempotency keys across re-runs of one scrape row;
+  // empty for states persisted before refresh runs existed.
+  run_id: z.string().default(""),
 });
 
 export type MetaScrapeState = z.infer<typeof MetaScrapeStateSchema>;
@@ -32,7 +35,7 @@ export function createInitialMetaScrapeState(now = new Date()): MetaScrapeState 
   const periodEnd = new Date(now);
   const periodStart = new Date(
     periodEnd.getTime() -
-      META_ACCOUNT_INSIGHTS_DAYS *
+      META_ACCOUNT_INSIGHTS_MAX_DAYS *
         HOURS_PER_DAY *
         MINUTES_PER_HOUR *
         SECONDS_PER_MINUTE *
@@ -49,7 +52,16 @@ export function createInitialMetaScrapeState(now = new Date()): MetaScrapeState 
     period_end: periodEnd.toISOString(),
     attempts: 0,
     last_error: null,
+    run_id: crypto.randomUUID(),
   };
+}
+
+/**
+ * Starting point for a profile + account-insights refresh that skips the
+ * media phase, used when a profile page is opened.
+ */
+export function createMetaInsightsRefreshState(now = new Date()): MetaScrapeState {
+  return { ...createInitialMetaScrapeState(now), phase: "profile" };
 }
 
 /** Parses persisted state instead of trusting arbitrary JSON from the database. */
@@ -67,11 +79,12 @@ export function getMetaScrapeStepKey(
   scrapeId: string,
   state: MetaScrapeState,
 ): string {
+  const prefix = state.run_id ? `${scrapeId}:${state.run_id}` : scrapeId;
   if (state.phase === "media") {
-    return `${scrapeId}:media:${state.media_cursor ?? "first"}`;
+    return `${prefix}:media:${state.media_cursor ?? "first"}`;
   }
   if (state.phase === "account_insights") {
-    return `${scrapeId}:account:${state.account_metric_index}`;
+    return `${prefix}:account:${state.account_metric_index}`;
   }
-  return `${scrapeId}:${state.phase}`;
+  return `${prefix}:${state.phase}`;
 }

@@ -5,10 +5,11 @@ import { PageShell } from "@/components/ui/page-shell";
 import { IG_USERNAME_PATTERN } from "@/lib/ig/constants";
 import { syncUnsettledApifyRunsForGroup } from "@/lib/ig/process-apify-run";
 import {
-  getIgAccountInsightsForGroup,
   getLatestIgScrapeJobForUsername,
+  listIgAccountInsightsForGroup,
   listIgPostsForProfile,
 } from "@/lib/ig/queries";
+import { maybeScheduleMetaInsightsRefresh } from "@/lib/meta/refresh-account-insights";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -39,12 +40,22 @@ export default async function IgProfilePage({ params }: IgProfilePageProps) {
     }
   }
 
+  if (latestJob) {
+    // Kick off a fresh account-insights scrape for every page open; the TTL
+    // and in-flight checks inside keep it from stacking runs.
+    try {
+      await maybeScheduleMetaInsightsRefresh(createAdminClient(), latestJob.group);
+    } catch (error) {
+      console.error("Could not schedule Meta insights refresh", error);
+    }
+  }
+
   const initialPosts = latestJob
     ? await listIgPostsForProfile(supabase, latestJob.profile.id)
     : [];
   const initialAccountInsights = latestJob
-    ? await getIgAccountInsightsForGroup(supabase, latestJob.group.id)
-    : null;
+    ? await listIgAccountInsightsForGroup(supabase, latestJob.group.id)
+    : [];
 
   return (
     <PageShell size="full">

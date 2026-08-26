@@ -137,20 +137,20 @@ export async function listIgPostsForProfile(
   return deduplicateIgPostsByShortcode(data ?? []);
 }
 
-/** Loads the newest private account-insight snapshot available for a profile. */
-export async function getIgAccountInsightsForGroup(
+/** Loads every private account-insight range snapshot available for a group. */
+export async function listIgAccountInsightsForGroup(
   supabase: SupabaseClient<Database>,
   groupId: string,
-): Promise<IgAccountInsights | null> {
+): Promise<IgAccountInsights[]> {
   const { data, error } = await supabase
     .from("ig_account_insights")
     .select("*")
     .eq("group_id", groupId)
-    .maybeSingle();
+    .order("period_days", { ascending: true });
   if (error) {
     return throwQueryError(error);
   }
-  return data;
+  return data ?? [];
 }
 
 /**

@@ -11,15 +11,17 @@ import {
   type MetaMedia,
 } from "@/lib/meta/api";
 import {
+  META_ACCOUNT_INSIGHT_RANGES_DAYS,
   META_FETCH_CONCURRENCY,
   META_MEDIA_INSIGHT_METRICS,
   META_PROFILE_SNAPSHOT_KEY,
   META_REEL_INSIGHT_METRICS,
-  type MetaAccountInsightMetric,
+  type MetaAccountInsightRangeDays,
+  type MetaAccountInsightSummaryMetric,
 } from "@/lib/meta/constants";
 import type { ResolvedMetaAccountAccess } from "@/lib/meta/connections";
 import {
-  getMetaAccountInsightRequests,
+  getMetaAccountInsightWindowedRequests,
   getMissingInsightMetrics,
 } from "@/lib/meta/insights";
 import {
@@ -35,6 +37,7 @@ const MEDIA_TYPE_CAROUSEL = "CAROUSEL_ALBUM";
 const MEDIA_TYPE_VIDEO = "VIDEO";
 const PERCENT_MAX = 100;
 const MILLISECONDS_PER_SECOND = 1_000;
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * MILLISECONDS_PER_SECOND;
 const META_EXPECTED_INSIGHT_ERROR_STATUS = 400;
 
 type AdminClient = SupabaseClient<Database>;
@@ -117,7 +120,6 @@ export async function importMetaMediaBatch(
 /** Refreshes profile metadata as its own short queue step. */
 export async function importMetaProfile(
   params: MetaScrapeContext & {
-    periodStart: string;
     periodEnd: string;
   },
 ): Promise<void> {
@@ -159,7 +161,7 @@ export async function importMetaProfile(
     throw error;
   }
 
-  await upsertMetaAccountInsightValues(params, {
+  const snapshotValues: Readonly<Record<string, Json>> = {
     follower_count: metaProfile.followerCount,
     [META_PROFILE_SNAPSHOT_KEY]: toJson({
       biography: metaProfile.biography,
@@ -172,26 +174,29 @@ export async function importMetaProfile(
       username: metaProfile.username,
       website: metaProfile.website,
     }),
-  });
+  };
+  for (const rangeDays of META_ACCOUNT_INSIGHT_RANGES_DAYS) {
+    await upsertMetaAccountInsightValues({ ...params, rangeDays }, snapshotValues);
+  }
 }
 
-/** Fetches and persists one account metric without keeping a function alive. */
+/** Fetches and persists one account metric window without keeping a function alive. */
 export async function importMetaAccountInsightMetric(
   params: MetaScrapeContext & {
-    metric: MetaAccountInsightMetric;
-    periodStart: string;
+    metric: MetaAccountInsightSummaryMetric;
+    rangeDays: MetaAccountInsightRangeDays;
     periodEnd: string;
   },
 ): Promise<void> {
+  const until = Date.parse(params.periodEnd);
+  const since = until - params.rangeDays * MILLISECONDS_PER_DAY;
   const metricValue = await getMetaAccountInsightMetric(
     {
       provider: params.access.connection.provider,
       igUserId: params.access.account.ig_user_id,
       token: params.access.token,
-      since: Math.floor(
-        Date.parse(params.periodStart) / MILLISECONDS_PER_SECOND,
-      ),
-      until: Math.floor(Date.parse(params.periodEnd) / MILLISECONDS_PER_SECOND),
+      since: Math.floor(since / MILLISECONDS_PER_SECOND),
+      until: Math.floor(until / MILLISECONDS_PER_SECOND),
     },
     params.metric,
   );
@@ -278,9 +283,9 @@ async function getMetaAccountInsightMetric(
     since: number;
     until: number;
   },
-  metric: MetaAccountInsightMetric,
+  metric: MetaAccountInsightSummaryMetric,
 ): Promise<Json> {
-  const requests = getMetaAccountInsightRequests(
+  const requests = getMetaAccountInsightWindowedRequests(
     metric,
     params.since,
     params.until,
@@ -303,7 +308,7 @@ async function getOptionalAccountInsight(
     igUserId: string;
     token: string;
   },
-  metric: MetaAccountInsightMetric,
+  metric: MetaAccountInsightSummaryMetric,
   query: Readonly<Record<string, string>>,
 ): Promise<Json> {
   try {
@@ -326,7 +331,7 @@ async function getOptionalAccountInsight(
 
 async function upsertMetaAccountInsightValues(
   params: MetaScrapeContext & {
-    periodStart: string;
+    rangeDays: MetaAccountInsightRangeDays;
     periodEnd: string;
   },
   values: Readonly<Record<string, Json>>,
@@ -335,21 +340,26 @@ async function upsertMetaAccountInsightValues(
     .from("ig_account_insights")
     .select("metrics")
     .eq("group_id", params.groupId)
+    .eq("period_days", params.rangeDays)
     .maybeSingle();
   if (existingError) {
     throw existingError;
   }
   const metrics = isRecord(existing?.metrics) ? existing.metrics : {};
+  const periodStart = new Date(
+    Date.parse(params.periodEnd) - params.rangeDays * MILLISECONDS_PER_DAY,
+  ).toISOString();
   const { error } = await params.admin.from("ig_account_insights").upsert(
     {
       ig_profile_id: params.profileId,
       group_id: params.groupId,
-      period_start: params.periodStart,
+      period_days: params.rangeDays,
+      period_start: periodStart,
       period_end: params.periodEnd,
       metrics: toJson({ ...metrics, ...values }),
       captured_at: params.periodEnd,
     },
-    { onConflict: "group_id" },
+    { onConflict: "group_id,period_days" },
   );
   if (error) {
     throw error;

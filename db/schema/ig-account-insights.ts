@@ -7,6 +7,7 @@ import {
   timestamp,
   jsonb,
   index,
+  integer,
   unique,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -21,6 +22,8 @@ export const igAccountInsights = pgTable(
     id: uuid().defaultRandom().primaryKey().notNull(),
     igProfileId: uuid("ig_profile_id").notNull(),
     groupId: uuid("group_id").notNull(),
+    // Window length of the snapshot; pre-range rows default to the old 90 days.
+    periodDays: integer("period_days").default(90).notNull(),
     periodStart: timestamp("period_start", {
       withTimezone: true,
       mode: "string",
@@ -38,7 +41,10 @@ export const igAccountInsights = pgTable(
       .notNull(),
   },
   (table) => [
-    unique("ig_account_insights_group_id_key").on(table.groupId),
+    unique("ig_account_insights_group_period_key").on(
+      table.groupId,
+      table.periodDays,
+    ),
     index("ig_account_insights_profile_captured_idx").on(
       table.igProfileId,
       table.capturedAt.desc(),

@@ -4,8 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getErrorMessage } from "@/lib/errors";
 import { listMetaMediaPage } from "@/lib/meta/api";
-import { META_ACCOUNT_INSIGHT_METRICS } from "@/lib/meta/constants";
 import { loadStoredMetaAccountAccess } from "@/lib/meta/connections";
+import { getMetaAccountInsightSteps } from "@/lib/meta/insights";
 import {
   importMetaAccountInsightMetric,
   importMetaMediaBatch,
@@ -55,7 +55,6 @@ export async function processMetaScrapeStep(
   if (loaded.state.phase === "profile") {
     await importMetaProfile({
       ...loaded.context,
-      periodStart: loaded.state.period_start,
       periodEnd: loaded.state.period_end,
     });
     const state = clearRetryState({
@@ -169,9 +168,9 @@ async function processAccountInsightStep(
   admin: AdminClient,
   loaded: LoadedMetaScrape,
 ): Promise<MetaScrapeStepResult> {
-  const metric =
-    META_ACCOUNT_INSIGHT_METRICS[loaded.state.account_metric_index];
-  if (!metric) {
+  const steps = getMetaAccountInsightSteps();
+  const step = steps[loaded.state.account_metric_index];
+  if (!step) {
     const state = clearRetryState(loaded.state);
     await persistState(admin, loaded.scrape.id, state, true);
     return { completed: true, state };
@@ -179,12 +178,12 @@ async function processAccountInsightStep(
 
   await importMetaAccountInsightMetric({
     ...loaded.context,
-    metric,
-    periodStart: loaded.state.period_start,
+    metric: step.metric,
+    rangeDays: step.rangeDays,
     periodEnd: loaded.state.period_end,
   });
   const nextMetricIndex = loaded.state.account_metric_index + 1;
-  const completed = nextMetricIndex >= META_ACCOUNT_INSIGHT_METRICS.length;
+  const completed = nextMetricIndex >= steps.length;
   const state = clearRetryState({
     ...loaded.state,
     account_metric_index: nextMetricIndex,

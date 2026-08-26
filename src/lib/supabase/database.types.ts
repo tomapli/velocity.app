@@ -98,6 +98,7 @@ export type Database = {
           id: string
           ig_profile_id: string
           metrics: Json
+          period_days: number
           period_end: string
           period_start: string
         }
@@ -107,6 +108,7 @@ export type Database = {
           id?: string
           ig_profile_id: string
           metrics: Json
+          period_days?: number
           period_end: string
           period_start: string
         }
@@ -116,6 +118,7 @@ export type Database = {
           id?: string
           ig_profile_id?: string
           metrics?: Json
+          period_days?: number
           period_end?: string
           period_start?: string
         }
@@ -123,7 +126,7 @@ export type Database = {
           {
             foreignKeyName: "ig_account_insights_group_id_fkey"
             columns: ["group_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "groups"
             referencedColumns: ["id"]
           },

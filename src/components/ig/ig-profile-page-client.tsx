@@ -51,9 +51,10 @@ import type {
   ScheduledScrape,
 } from "@/lib/ig/queries";
 import {
-  getIgAccountInsightsForGroup,
+  listIgAccountInsightsForGroup,
   listIgPostsForProfile,
 } from "@/lib/ig/queries";
+import { META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS } from "@/lib/meta/constants";
 import { scheduleIgScrape } from "@/lib/ig/schedule-scrape";
 import { useIgScrapesRealtime } from "@/lib/ig/use-ig-scrapes-realtime";
 import { createClient } from "@/lib/supabase/client";
@@ -63,7 +64,7 @@ interface IgProfilePageClientProps {
   username: string;
   initialJob: IgScrapeJob | null;
   initialPosts: IgPost[];
-  initialAccountInsights: IgAccountInsights | null;
+  initialAccountInsights: IgAccountInsights[];
 }
 
 type PromptMode = "generate" | "regenerate" | null;
@@ -88,7 +89,7 @@ export function IgProfilePageClient({
   const [groups, setGroups] = useState<Group[]>(initialJob ? [initialJob.group] : []);
   const [scrapes, setScrapes] = useState<ScheduledScrape[]>(initialJob?.scrapes ?? []);
   const [posts, setPosts] = useState<IgPost[]>(initialPosts);
-  const [accountInsights, setAccountInsights] = useState<IgAccountInsights | null>(
+  const [accountInsights, setAccountInsights] = useState<IgAccountInsights[]>(
     initialAccountInsights,
   );
   const [promptMode, setPromptMode] = useState<PromptMode>(() =>
@@ -159,7 +160,7 @@ export function IgProfilePageClient({
   useEffect(() => {
     if (!profile) {
       setPosts([]);
-      setAccountInsights(null);
+      setAccountInsights([]);
       return;
     }
 
@@ -170,7 +171,9 @@ export function IgProfilePageClient({
       try {
         const [nextPosts, nextAccountInsights] = await Promise.all([
           listIgPostsForProfile(supabase, profile.id),
-          job ? getIgAccountInsightsForGroup(supabase, job.group.id) : Promise.resolve(null),
+          job
+            ? listIgAccountInsightsForGroup(supabase, job.group.id)
+            : Promise.resolve([]),
         ]);
         if (!cancelled) {
           setPosts(nextPosts);
@@ -221,7 +224,7 @@ export function IgProfilePageClient({
       setGroups([created.group]);
       setScrapes(created.scrapes);
       setPosts([]);
-      setAccountInsights(null);
+      setAccountInsights([]);
       setParamsDialogOpen(false);
       toast.success(`Scheduled @${username}`);
     } catch (error) {
@@ -234,7 +237,12 @@ export function IgProfilePageClient({
   const handleExport = () => {
     const csv = postsToCsv(visiblePosts, {
       dataSource: job?.group.data_source,
-      accountInsights,
+      accountInsights:
+        accountInsights.find(
+          (row) => row.period_days === META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
+        ) ??
+        accountInsights.at(-1) ??
+        null,
     });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -283,7 +291,14 @@ export function IgProfilePageClient({
         isRescanning={isScheduling}
       />
 
-      {accountInsights ? <IgAccountInsightsPanel insights={accountInsights} /> : null}
+      {accountInsights.length > 0 ? (
+        <IgAccountInsightsPanel
+          insights={accountInsights}
+          isRefreshing={job?.scrapes.some(
+            (scrape) => scrape.scrape_type === "meta" && !scrape.finished_at,
+          )}
+        />
+      ) : null}
 
       {posts.length === 0 && isBusy ? (
         <Empty className="border">
