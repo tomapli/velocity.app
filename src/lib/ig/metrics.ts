@@ -16,9 +16,6 @@ export type IgPostSortKey =
   | "save_count"
   | "share_count"
   | "follows_count"
-  | "follower_view_count"
-  | "non_follower_view_count"
-  | "follower_non_follower_ratio"
   | "reach_count"
   | "hook_rate"
   | "average_watch_time_ms"
@@ -81,9 +78,6 @@ export const IG_POST_SORT_OPTIONS: { key: IgPostSortKey; label: string }[] = [
   { key: "save_count", label: "Saves" },
   { key: "share_count", label: "Shares" },
   { key: "follows_count", label: "Followers from post" },
-  { key: "follower_view_count", label: "Follower views" },
-  { key: "non_follower_view_count", label: "Non-follower views" },
-  { key: "follower_non_follower_ratio", label: "Follower ratio" },
   { key: "reach_count", label: "Reach" },
   { key: "hook_rate", label: "Hook rate" },
   { key: "average_watch_time_ms", label: "Average watch time" },
@@ -161,12 +155,6 @@ export function getIgPostSortValue(
       return post.share_count;
     case "follows_count":
       return post.follows_count;
-    case "follower_view_count":
-      return post.follower_view_count;
-    case "non_follower_view_count":
-      return post.non_follower_view_count;
-    case "follower_non_follower_ratio":
-      return post.follower_non_follower_ratio;
     case "reach_count":
       return post.reach_count;
     case "hook_rate":
@@ -268,10 +256,6 @@ export function formatMilliseconds(milliseconds: number | null): string | null {
   return milliseconds == null ? null : `${(milliseconds / 1_000).toFixed(1)}s`;
 }
 
-export function formatRatio(value: number | null): string | null {
-  return value == null ? null : `${PERCENT_FORMATTER.format(value)}×`;
-}
-
 export function metricToneClassName(tone: MetricTone): string {
   switch (tone) {
     case "pass":
@@ -310,9 +294,6 @@ export function postsToCsv(
     "Comments",
     "Likes",
     "Followers from post",
-    "Follower views",
-    "Non-follower views",
-    "Follower/non-follower ratio",
     "Reach",
     "Hook rate %",
     "Average watch time (ms)",
@@ -344,9 +325,6 @@ export function postsToCsv(
       post.comment_count ?? "",
       post.like_count ?? "",
       post.follows_count ?? "",
-      post.follower_view_count ?? "",
-      post.non_follower_view_count ?? "",
-      post.follower_non_follower_ratio ?? "",
       post.reach_count ?? "",
       post.hook_rate ?? "",
       post.average_watch_time_ms ?? "",

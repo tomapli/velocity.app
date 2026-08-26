@@ -33,9 +33,6 @@ export type IgPostListItem = Pick<
   | "comment_count"
   | "like_count"
   | "follows_count"
-  | "follower_view_count"
-  | "non_follower_view_count"
-  | "follower_non_follower_ratio"
   | "reach_count"
   | "hook_rate"
   | "average_watch_time_ms"
@@ -65,9 +62,6 @@ const IG_POST_LIST_COLUMNS = `
   comment_count,
   like_count,
   follows_count,
-  follower_view_count,
-  non_follower_view_count,
-  follower_non_follower_ratio,
   reach_count,
   hook_rate,
   average_watch_time_ms,

@@ -86,3 +86,4 @@ docs/.vitepress/dist
 .vitepress
 # Local Firecrawl documentation cache
 .firecrawl/
+.env*

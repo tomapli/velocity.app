@@ -25,7 +25,6 @@ import {
   formatCount,
   formatMilliseconds,
   formatPercent,
-  formatRatio,
   formatUploadedAt,
   getIgPostMetrics,
   MEDIA_TYPE_LABELS,
@@ -151,27 +150,6 @@ export function IgPostsTable({
             <SortableTableHead
               label="Follows"
               columnKey="follows_count"
-              sortKey={sortKey}
-              sortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            <SortableTableHead
-              label="Follower views"
-              columnKey="follower_view_count"
-              sortKey={sortKey}
-              sortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            <SortableTableHead
-              label="Non-follower views"
-              columnKey="non_follower_view_count"
-              sortKey={sortKey}
-              sortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            <SortableTableHead
-              label="Follower ratio"
-              columnKey="follower_non_follower_ratio"
               sortKey={sortKey}
               sortDirection={sortDirection}
               onSort={handleSort}
@@ -379,15 +357,6 @@ function IgPostRow({ username, post }: { username: string; post: IgPostListItem 
       </TableCell>
       <TableCell className="pointer-events-none">
         <IgPlainMetric value={formatCount(post.follows_count)} />
-      </TableCell>
-      <TableCell className="pointer-events-none">
-        <IgPlainMetric value={formatCount(post.follower_view_count)} />
-      </TableCell>
-      <TableCell className="pointer-events-none">
-        <IgPlainMetric value={formatCount(post.non_follower_view_count)} />
-      </TableCell>
-      <TableCell className="pointer-events-none">
-        <IgPlainMetric value={formatRatio(post.follower_non_follower_ratio)} />
       </TableCell>
       <TableCell className="pointer-events-none">
         <IgPlainMetric value={formatCount(post.reach_count)} />
