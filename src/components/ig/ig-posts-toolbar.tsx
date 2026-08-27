@@ -15,14 +15,16 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { IG_MEDIA_TYPES } from "@/lib/ig/constants";
 import {
-  IG_POST_SORT_OPTIONS,
+  getIgPostSortOptions,
   MEDIA_TYPE_LABELS,
   type IgMediaType,
   type IgPostSortKey,
+  type IgScrapeDataSource,
 } from "@/lib/ig/metrics";
 
 interface IgPostsToolbarProps {
   mediaTypes: IgMediaType[];
+  dataSource?: IgScrapeDataSource;
   onMediaTypesChange: (mediaTypes: IgMediaType[]) => void;
   sortKey: IgPostSortKey;
   sortDirection: "asc" | "desc";
@@ -40,6 +42,7 @@ interface IgPostsToolbarProps {
  */
 export function IgPostsToolbar({
   mediaTypes,
+  dataSource,
   onMediaTypesChange,
   sortKey,
   sortDirection,
@@ -51,8 +54,9 @@ export function IgPostsToolbar({
   isExporting,
   isRescanning,
 }: IgPostsToolbarProps) {
+  const sortOptions = getIgPostSortOptions(dataSource);
   const sortLabel =
-    IG_POST_SORT_OPTIONS.find((option) => option.key === sortKey)?.label ?? "Sort";
+    sortOptions.find((option) => option.key === sortKey)?.label ?? "Sort";
 
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -89,7 +93,7 @@ export function IgPostsToolbar({
               value={sortKey}
               onValueChange={(value) => onSortKeyChange(value as IgPostSortKey)}
             >
-              {IG_POST_SORT_OPTIONS.map((option) => (
+              {sortOptions.map((option) => (
                 <DropdownMenuRadioItem key={option.key} value={option.key}>
                   {option.label}
                 </DropdownMenuRadioItem>

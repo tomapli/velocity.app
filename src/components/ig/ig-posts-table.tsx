@@ -27,8 +27,10 @@ import {
   formatPercent,
   formatUploadedAt,
   getIgPostMetrics,
+  hasMetaIgPostMetrics,
   MEDIA_TYPE_LABELS,
   type IgPostSortKey,
+  type IgScrapeDataSource,
 } from "@/lib/ig/metrics";
 import type { IgPostListItem } from "@/lib/ig/queries";
 import { cn } from "@/lib/utils";
@@ -36,6 +38,7 @@ import { cn } from "@/lib/utils";
 interface IgPostsTableProps {
   username: string;
   posts: IgPostListItem[];
+  dataSource?: IgScrapeDataSource;
   sortKey: IgPostSortKey;
   sortDirection: "asc" | "desc";
   onSortKeyChange: (key: IgPostSortKey) => void;
@@ -60,11 +63,13 @@ const MEDIA_TYPE_BADGE_CLASS: Record<
 export function IgPostsTable({
   username,
   posts,
+  dataSource,
   sortKey,
   sortDirection,
   onSortKeyChange,
   onSortDirectionChange,
 }: IgPostsTableProps) {
+  const includesMetaMetrics = hasMetaIgPostMetrics(dataSource);
   const handleSort = (key: IgPostSortKey) => {
     if (sortKey === key) {
       onSortDirectionChange(sortDirection === "desc" ? "asc" : "desc");
@@ -147,41 +152,52 @@ export function IgPostsTable({
               sortDirection={sortDirection}
               onSort={handleSort}
             />
-            <SortableTableHead
-              label="Follows"
-              columnKey="follows_count"
-              sortKey={sortKey}
-              sortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            <SortableTableHead
-              label="Reach"
-              columnKey="reach_count"
-              sortKey={sortKey}
-              sortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            <SortableTableHead
-              label="Hook rate"
-              columnKey="hook_rate"
-              sortKey={sortKey}
-              sortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            <SortableTableHead
-              label="Avg watch"
-              columnKey="average_watch_time_ms"
-              sortKey={sortKey}
-              sortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            <SortableTableHead
-              label="Hold rate"
-              columnKey="hold_rate"
-              sortKey={sortKey}
-              sortDirection={sortDirection}
-              onSort={handleSort}
-            />
+            {includesMetaMetrics ? (
+              <>
+                <SortableTableHead
+                  label="Follows"
+                  columnKey="follows_count"
+                  sortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Follows / 1k views"
+                  columnKey="follows_per_1k_views"
+                  sortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Reach"
+                  columnKey="reach_count"
+                  sortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Hook rate"
+                  columnKey="hook_rate"
+                  sortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Avg watch"
+                  columnKey="average_watch_time_ms"
+                  sortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+                <SortableTableHead
+                  label="Hold rate"
+                  columnKey="hold_rate"
+                  sortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+              </>
+            ) : null}
             <SortableTableHead
               label="ER"
               columnKey="er"
@@ -236,7 +252,12 @@ export function IgPostsTable({
         </TableHeader>
         <TableBody>
           {posts.map((post) => (
-            <IgPostRow key={post.id} username={username} post={post} />
+            <IgPostRow
+              key={post.id}
+              username={username}
+              post={post}
+              includesMetaMetrics={includesMetaMetrics}
+            />
           ))}
         </TableBody>
       </Table>
@@ -292,7 +313,15 @@ function SortableTableHead({
   );
 }
 
-function IgPostRow({ username, post }: { username: string; post: IgPostListItem }) {
+function IgPostRow({
+  username,
+  post,
+  includesMetaMetrics,
+}: {
+  username: string;
+  post: IgPostListItem;
+  includesMetaMetrics: boolean;
+}) {
   const metrics = getIgPostMetrics(post);
   const detailHref = `/ig/${username}/${post.id}`;
 
@@ -355,21 +384,32 @@ function IgPostRow({ username, post }: { username: string; post: IgPostListItem 
       <TableCell className="pointer-events-none">
         <IgPlainMetric value={formatCount(post.share_count)} />
       </TableCell>
-      <TableCell className="pointer-events-none">
-        <IgPlainMetric value={formatCount(post.follows_count)} />
-      </TableCell>
-      <TableCell className="pointer-events-none">
-        <IgPlainMetric value={formatCount(post.reach_count)} />
-      </TableCell>
-      <TableCell className="pointer-events-none">
-        <IgPlainMetric value={post.hook_rate == null ? null : formatPercent(post.hook_rate)} />
-      </TableCell>
-      <TableCell className="pointer-events-none">
-        <IgPlainMetric value={formatMilliseconds(post.average_watch_time_ms)} />
-      </TableCell>
-      <TableCell className="pointer-events-none">
-        <IgPlainMetric value={post.hold_rate == null ? null : formatPercent(post.hold_rate)} />
-      </TableCell>
+      {includesMetaMetrics ? (
+        <>
+          <TableCell className="pointer-events-none">
+            <IgPlainMetric value={formatCount(post.follows_count)} />
+          </TableCell>
+          <TableCell className="pointer-events-none">
+            <IgMetricBadge value={metrics.followsPerThousandViews} />
+          </TableCell>
+          <TableCell className="pointer-events-none">
+            <IgPlainMetric value={formatCount(post.reach_count)} />
+          </TableCell>
+          <TableCell className="pointer-events-none">
+            <IgPlainMetric
+              value={post.hook_rate == null ? null : formatPercent(post.hook_rate)}
+            />
+          </TableCell>
+          <TableCell className="pointer-events-none">
+            <IgPlainMetric value={formatMilliseconds(post.average_watch_time_ms)} />
+          </TableCell>
+          <TableCell className="pointer-events-none">
+            <IgPlainMetric
+              value={post.hold_rate == null ? null : formatPercent(post.hold_rate)}
+            />
+          </TableCell>
+        </>
+      ) : null}
       <TableCell className="pointer-events-none">
         <IgMetricBadge value={metrics.unweightedEr} />
       </TableCell>

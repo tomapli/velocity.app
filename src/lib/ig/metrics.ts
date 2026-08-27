@@ -6,6 +6,8 @@ import type {
 } from "@/lib/ig/queries";
 
 export type IgMediaType = Database["public"]["Enums"]["ig_post_media_type"];
+export type IgScrapeDataSource =
+  Database["public"]["Enums"]["ig_scrape_data_source"];
 export type MetricTone = "pass" | "near" | "miss" | "neutral";
 export type IgPostSortKey =
   | "uploaded_at"
@@ -16,6 +18,7 @@ export type IgPostSortKey =
   | "save_count"
   | "share_count"
   | "follows_count"
+  | "follows_per_1k_views"
   | "reach_count"
   | "hook_rate"
   | "average_watch_time_ms"
@@ -43,6 +46,7 @@ export interface IgPostMetrics {
   shareRate: ScoredValue | null;
   commentRate: ScoredValue | null;
   likeRate: ScoredValue | null;
+  followsPerThousandViews: ScoredValue | null;
   videoLength: ScoredValue | null;
   descriptionLengthScore: ScoredValue | null;
 }
@@ -62,6 +66,7 @@ export const IG_COMMENT_WEIGHT = 2;
 export const IG_LIKE_WEIGHT = 1;
 
 export const IG_NEAR_RATIO = 0.7;
+export const IG_VIEWS_PER_THOUSAND = 1_000;
 
 export const MEDIA_TYPE_LABELS: Record<IgMediaType, string> = {
   carousel: "Carousel",
@@ -69,7 +74,12 @@ export const MEDIA_TYPE_LABELS: Record<IgMediaType, string> = {
   static: "Static",
 };
 
-export const IG_POST_SORT_OPTIONS: { key: IgPostSortKey; label: string }[] = [
+interface IgPostSortOption {
+  key: IgPostSortKey;
+  label: string;
+}
+
+export const IG_POST_SORT_OPTIONS: IgPostSortOption[] = [
   { key: "uploaded_at", label: "Upload date" },
   { key: "video_length_secs", label: "Video length" },
   { key: "view_count", label: "Views" },
@@ -78,6 +88,7 @@ export const IG_POST_SORT_OPTIONS: { key: IgPostSortKey; label: string }[] = [
   { key: "save_count", label: "Saves" },
   { key: "share_count", label: "Shares" },
   { key: "follows_count", label: "Followers from post" },
+  { key: "follows_per_1k_views", label: "Follows / 1k views" },
   { key: "reach_count", label: "Reach" },
   { key: "hook_rate", label: "Hook rate" },
   { key: "average_watch_time_ms", label: "Average watch time" },
@@ -90,6 +101,36 @@ export const IG_POST_SORT_OPTIONS: { key: IgPostSortKey; label: string }[] = [
   { key: "like_rate", label: "Like rate" },
   { key: "description_length", label: "Description length" },
 ];
+
+const META_ONLY_SORT_KEYS = new Set<IgPostSortKey>([
+  "follows_count",
+  "follows_per_1k_views",
+  "reach_count",
+  "hook_rate",
+  "average_watch_time_ms",
+  "hold_rate",
+]);
+
+export function hasMetaIgPostMetrics(
+  dataSource?: IgScrapeDataSource,
+): boolean {
+  return dataSource === "meta_hybrid";
+}
+
+export function getIgPostSortOptions(
+  dataSource?: IgScrapeDataSource,
+): IgPostSortOption[] {
+  return hasMetaIgPostMetrics(dataSource)
+    ? IG_POST_SORT_OPTIONS
+    : IG_POST_SORT_OPTIONS.filter((option) => !META_ONLY_SORT_KEYS.has(option.key));
+}
+
+export function isIgPostSortKeyAvailable(
+  key: IgPostSortKey,
+  dataSource?: IgScrapeDataSource,
+): boolean {
+  return hasMetaIgPostMetrics(dataSource) || !META_ONLY_SORT_KEYS.has(key);
+}
 
 const COUNT_FORMATTER = new Intl.NumberFormat("en", {
   notation: "compact",
@@ -124,6 +165,9 @@ export function getIgPostMetrics(post: IgPostListItem): IgPostMetrics {
     shareRate: canRate ? scoreRate(post.share_count, views, IG_SHARE_RATE_TARGET, "≥ 2%") : null,
     commentRate: canRate ? scoreRate(post.comment_count, views, null, null) : null,
     likeRate: canRate ? scoreRate(post.like_count, views, null, null) : null,
+    followsPerThousandViews: canRate
+      ? scoreFollowsPerThousandViews(post.follows_count, views)
+      : null,
     videoLength: scoreVideoLength(post.video_length_secs),
     descriptionLengthScore: scoreDescriptionLength(descriptionLength),
   };
@@ -155,6 +199,8 @@ export function getIgPostSortValue(
       return post.share_count;
     case "follows_count":
       return post.follows_count;
+    case "follows_per_1k_views":
+      return metrics.followsPerThousandViews?.value ?? null;
     case "reach_count":
       return post.reach_count;
     case "hook_rate":
@@ -279,6 +325,7 @@ export function postsToCsv(
     accountInsights?: IgAccountInsights | null;
   } = {},
 ): string {
+  const includesMetaMetrics = hasMetaIgPostMetrics(options.dataSource);
   const headers = [
     "Source",
     "Date of upload",
@@ -293,11 +340,16 @@ export function postsToCsv(
     "Shares",
     "Comments",
     "Likes",
-    "Followers from post",
-    "Reach",
-    "Hook rate %",
-    "Average watch time (ms)",
-    "Hold rate %",
+    ...(includesMetaMetrics
+      ? [
+          "Followers from post",
+          "Follows / 1k views",
+          "Reach",
+          "Hook rate %",
+          "Average watch time (ms)",
+          "Hold rate %",
+        ]
+      : []),
     "Description",
     "Description length",
     "ER %",
@@ -324,11 +376,16 @@ export function postsToCsv(
       post.share_count ?? "",
       post.comment_count ?? "",
       post.like_count ?? "",
-      post.follows_count ?? "",
-      post.reach_count ?? "",
-      post.hook_rate ?? "",
-      post.average_watch_time_ms ?? "",
-      post.hold_rate ?? "",
+      ...(includesMetaMetrics
+        ? [
+            post.follows_count ?? "",
+            metrics.followsPerThousandViews?.value ?? "",
+            post.reach_count ?? "",
+            post.hook_rate ?? "",
+            post.average_watch_time_ms ?? "",
+            post.hold_rate ?? "",
+          ]
+        : []),
       post.description ?? "",
       metrics.descriptionLength ?? "",
       metrics.unweightedEr?.value ?? "",
@@ -400,6 +457,23 @@ function scoreRate(
   }
 
   return scoreAgainstMin(value, target, targetLabel);
+}
+
+function scoreFollowsPerThousandViews(
+  follows: number | null,
+  views: number,
+): ScoredValue | null {
+  if (follows == null) {
+    return null;
+  }
+
+  const value = (follows / views) * IG_VIEWS_PER_THOUSAND;
+  return {
+    value,
+    formatted: PERCENT_FORMATTER.format(value),
+    tone: "neutral",
+    targetLabel: "",
+  };
 }
 
 function scoreAgainstMin(value: number, target: number, targetLabel: string): ScoredValue {

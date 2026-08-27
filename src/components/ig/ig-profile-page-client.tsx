@@ -30,6 +30,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   filterIgPostsByMediaType,
+  isIgPostSortKeyAvailable,
   postsToCsv,
   sortIgPosts,
   type IgMediaType,
@@ -127,6 +128,13 @@ export function IgProfilePageClient({
       buildIgScrapeJobs(groups, scrapes, new Map([[profile.id, profile]]))[0] ?? null
     );
   }, [groups, profile, scrapes]);
+  const dataSource = job?.group.data_source;
+
+  useEffect(() => {
+    if (!isIgPostSortKeyAvailable(sortKey, dataSource)) {
+      setSortKey("uploaded_at");
+    }
+  }, [dataSource, sortKey]);
 
   const postsDataVersion = getPostsDataVersion(profile?.id ?? null, job);
   const insightsDataVersion = getInsightsDataVersion(job);
@@ -445,6 +453,7 @@ export function IgProfilePageClient({
 
       <IgPostsToolbar
         mediaTypes={mediaTypes}
+        dataSource={dataSource}
         onMediaTypesChange={setMediaTypes}
         sortKey={sortKey}
         sortDirection={sortDirection}
@@ -510,6 +519,7 @@ export function IgProfilePageClient({
         <IgPostsTable
           username={username}
           posts={visiblePosts}
+          dataSource={dataSource}
           sortKey={sortKey}
           sortDirection={sortDirection}
           onSortKeyChange={setSortKey}

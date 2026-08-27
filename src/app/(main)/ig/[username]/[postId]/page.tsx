@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { IgPostDetail } from "@/components/ig/ig-post-detail";
 import { PageShell } from "@/components/ui/page-shell";
 import { IG_POST_ID_PATTERN, IG_USERNAME_PATTERN } from "@/lib/ig/constants";
-import { getIgPostForUsername, getIgProfileByUsername } from "@/lib/ig/queries";
+import {
+  getIgPostForUsername,
+  getLatestIgScrapeJobForUsername,
+} from "@/lib/ig/queries";
 import { createClient } from "@/lib/supabase/server";
 
 interface IgPostPageProps {
@@ -19,9 +22,9 @@ export default async function IgPostPage({ params }: IgPostPageProps) {
   }
 
   const supabase = await createClient();
-  const [post, profile] = await Promise.all([
+  const [post, job] = await Promise.all([
     getIgPostForUsername(supabase, username, postId),
-    getIgProfileByUsername(supabase, username),
+    getLatestIgScrapeJobForUsername(supabase, username),
   ]);
 
   if (!post) {
@@ -30,7 +33,12 @@ export default async function IgPostPage({ params }: IgPostPageProps) {
 
   return (
     <PageShell size="full">
-        <IgPostDetail username={username} profile={profile} post={post} />
+      <IgPostDetail
+        username={username}
+        profile={job?.profile ?? null}
+        post={post}
+        dataSource={job?.group.data_source}
+      />
     </PageShell>
   );
 }

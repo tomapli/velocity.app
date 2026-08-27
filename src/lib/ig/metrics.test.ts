@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { IgPost } from "@/lib/ig/queries";
 import {
   filterIgPostsByMediaType,
+  getIgPostSortOptions,
   getIgPostMetrics,
   postsToCsv,
   sortIgPosts,
@@ -50,11 +51,28 @@ describe("getIgPostMetrics", () => {
     expect(metrics.weightedEr?.tone).toBe("pass");
     expect(metrics.unweightedEr?.value).toBe(19);
     expect(metrics.saveRate?.formatted).toBe("4%");
+    expect(metrics.followsPerThousandViews).toBeNull();
     expect(metrics.videoLength?.tone).toBe("pass");
 
     const zeroViews = getIgPostMetrics(post({ view_count: 0 }));
     expect(zeroViews.weightedEr).toBeNull();
     expect(zeroViews.saveRate).toBeNull();
+  });
+
+  it("computes follows gained per thousand views", () => {
+    const metrics = getIgPostMetrics(
+      post({ follows_count: 25, view_count: 2_000 }),
+    );
+
+    expect(metrics.followsPerThousandViews).toMatchObject({
+      value: 12.5,
+      formatted: "12.5",
+      tone: "neutral",
+    });
+    expect(
+      getIgPostMetrics(post({ follows_count: 25, view_count: 0 }))
+        .followsPerThousandViews,
+    ).toBeNull();
   });
 
   it("omits rates when the source count is missing", () => {
@@ -90,6 +108,29 @@ describe("sortIgPosts and filterIgPostsByMediaType", () => {
     ]);
   });
 
+  it("sorts by follows per thousand views", () => {
+    const lower = post({ id: "a", follows_count: 10, view_count: 2_000 });
+    const higher = post({ id: "b", follows_count: 10, view_count: 500 });
+
+    expect(
+      sortIgPosts([lower, higher], "follows_per_1k_views", "desc").map(
+        (row) => row.id,
+      ),
+    ).toEqual(["b", "a"]);
+  });
+
+  it("omits Meta-only sort choices for public data", () => {
+    const publicKeys = getIgPostSortOptions("public").map((option) => option.key);
+
+    expect(publicKeys).not.toContain("follows_count");
+    expect(publicKeys).not.toContain("follows_per_1k_views");
+    expect(publicKeys).not.toContain("reach_count");
+    expect(publicKeys).not.toContain("hook_rate");
+    expect(publicKeys).not.toContain("average_watch_time_ms");
+    expect(publicKeys).not.toContain("hold_rate");
+    expect(publicKeys).toContain("like_rate");
+  });
+
   it("filters to selected media types", () => {
     const posts = [
       post({ id: "a", media_type: "short" }),
@@ -110,5 +151,23 @@ describe("postsToCsv", () => {
     const csv = postsToCsv([post({ description: "hello, world" })]);
     expect(csv).toContain('"hello, world"');
     expect(csv.split("\n")).toHaveLength(2);
+  });
+
+  it("includes the follows metric for hybrid data and hides Meta-only columns for public data", () => {
+    const hybridHeader = postsToCsv(
+      [post({ follows_count: 25, view_count: 2_000 })],
+      { dataSource: "meta_hybrid" },
+    ).split("\n")[0];
+    const publicHeader = postsToCsv([post()], { dataSource: "public" }).split(
+      "\n",
+    )[0];
+
+    expect(hybridHeader).toContain("Follows / 1k views");
+    expect(publicHeader).not.toContain("Followers from post");
+    expect(publicHeader).not.toContain("Follows / 1k views");
+    expect(publicHeader).not.toContain("Reach");
+    expect(publicHeader).not.toContain("Hook rate %");
+    expect(publicHeader).not.toContain("Average watch time (ms)");
+    expect(publicHeader).not.toContain("Hold rate %");
   });
 });

@@ -13,7 +13,9 @@ import {
   formatPercent,
   formatUploadedAt,
   getIgPostMetrics,
+  hasMetaIgPostMetrics,
   MEDIA_TYPE_LABELS,
+  type IgScrapeDataSource,
   type ScoredValue,
 } from "@/lib/ig/metrics";
 import type { IgPost, IgProfile } from "@/lib/ig/queries";
@@ -22,13 +24,20 @@ interface IgPostDetailProps {
   username: string;
   profile: IgProfile | null;
   post: IgPost;
+  dataSource?: IgScrapeDataSource;
 }
 
 /**
  * Full metric breakdown for a single Instagram post, including media previews.
  */
-export function IgPostDetail({ username, profile, post }: IgPostDetailProps) {
+export function IgPostDetail({
+  username,
+  profile,
+  post,
+  dataSource,
+}: IgPostDetailProps) {
   const metrics = getIgPostMetrics(post);
+  const includesMetaMetrics = hasMetaIgPostMetrics(dataSource);
   const scored = [
     { label: "Video length", value: metrics.videoLength, hint: "Entertainment 5–40s · educational 25–60s" },
     { label: "Description length", value: metrics.descriptionLengthScore, hint: "≈ 300–700 characters" },
@@ -38,6 +47,15 @@ export function IgPostDetail({ username, profile, post }: IgPostDetailProps) {
     { label: "Share rate", value: metrics.shareRate, hint: "Target ≥ 2%" },
     { label: "Comment rate", value: metrics.commentRate, hint: null },
     { label: "Like rate", value: metrics.likeRate, hint: null },
+    ...(includesMetaMetrics
+      ? [
+          {
+            label: "Follows / 1k views",
+            value: metrics.followsPerThousandViews,
+            hint: "Followers gained per 1,000 views",
+          },
+        ]
+      : []),
   ].filter((item): item is { label: string; value: ScoredValue; hint: string | null } => item.value != null);
 
   const counts = [
@@ -46,11 +64,24 @@ export function IgPostDetail({ username, profile, post }: IgPostDetailProps) {
     { label: "Comments", value: formatCount(post.comment_count) },
     { label: "Saves", value: formatCount(post.save_count) },
     { label: "Shares", value: formatCount(post.share_count) },
-    { label: "Followers from post", value: formatCount(post.follows_count) },
-    { label: "Reach", value: formatCount(post.reach_count) },
-    { label: "Hook rate", value: post.hook_rate == null ? null : formatPercent(post.hook_rate) },
-    { label: "Average watch time", value: formatMilliseconds(post.average_watch_time_ms) },
-    { label: "Hold rate", value: post.hold_rate == null ? null : formatPercent(post.hold_rate) },
+    ...(includesMetaMetrics
+      ? [
+          { label: "Followers from post", value: formatCount(post.follows_count) },
+          { label: "Reach", value: formatCount(post.reach_count) },
+          {
+            label: "Hook rate",
+            value: post.hook_rate == null ? null : formatPercent(post.hook_rate),
+          },
+          {
+            label: "Average watch time",
+            value: formatMilliseconds(post.average_watch_time_ms),
+          },
+          {
+            label: "Hold rate",
+            value: post.hold_rate == null ? null : formatPercent(post.hold_rate),
+          },
+        ]
+      : []),
   ].filter((item) => item.value != null);
 
   return (

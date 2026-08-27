@@ -77,6 +77,43 @@ describe("IgPostsTable", () => {
     expect(screen.queryByText("Comment quality")).not.toBeInTheDocument();
   });
 
+  it("shows follows per thousand views for hybrid data", () => {
+    render(
+      <IgPostsTable
+        username="velocity"
+        posts={[post({ follows_count: 25, view_count: 2_000 })]}
+        dataSource="meta_hybrid"
+        {...sortProps}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Follows / 1k views" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("12.5")).toBeInTheDocument();
+  });
+
+  it("hides Meta-only metric columns for public data", () => {
+    render(
+      <IgPostsTable
+        username="velocity"
+        posts={[post()]}
+        dataSource="public"
+        {...sortProps}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Follows" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Follows / 1k views" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reach" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Hook rate" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Avg watch" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Hold rate" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Like %" })).toBeInTheDocument();
+  });
+
   it("switches sort column when a different header is clicked", async () => {
     const user = userEvent.setup();
     const onSortKeyChange = vi.fn();
