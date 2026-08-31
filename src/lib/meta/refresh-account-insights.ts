@@ -133,7 +133,7 @@ async function startMetaScrapeRun(
       throw error;
     }
     console.warn(
-      "Meta queue unavailable in dev (run `vercel env pull` for the real queue); processing the scrape inline",
+      "Meta queue unavailable in dev (`vercel env pull` for Vercel Queues, `pnpm cf:preview` for Cloudflare Queues); processing the scrape inline",
       error,
     );
     after(() => runMetaScrapeInline(admin, scrapeId));

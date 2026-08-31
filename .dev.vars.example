@@ -1,0 +1,8 @@
+# Local overrides for `pnpm cf:preview` (wrangler dev). Copy to `.dev.vars`.
+# Everything in `.env.local` is already loaded by the OpenNext build, so this
+# file usually only needs the Cloudflare-specific values.
+NEXTJS_ENV=development
+APP_URL=http://localhost:8787
+# Shared secret between the Worker queue consumer and the Next.js route.
+# Generate with: openssl rand -base64 32
+META_SCRAPES_QUEUE_SECRET=

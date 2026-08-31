@@ -55,6 +55,7 @@ receive redacted connection/account summaries.
 - [Blacksmith](https://app.blacksmith.sh/) - CI/CD for the project
 - [Supabase](https://supabase.com/org/zjdqjjekgwwysjkouxpf) - Database for the project
 - [Vercel](https://vercel.com/spirit-of-taps-projects/velocitapp) - Hosting for the project
+  - Also deployable to Cloudflare Workers — see `docs/runbooks/cloudflare-workers.md`
 - [Cloudflare DNS](https://dash.cloudflare.com/09d0b565479ef597d4c1bfa2062078b5/tiimi.cz/dns/records) - DNS for the project
 
 # Language

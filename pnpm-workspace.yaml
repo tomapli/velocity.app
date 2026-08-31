@@ -7,6 +7,7 @@ onlyBuiltDependencies:
   - ssh2
   - supabase
   - unrs-resolver
+  - workerd
 
 overrides:
   # Pin within the same major. Open-ended targets like `>=6.14.0` let pnpm

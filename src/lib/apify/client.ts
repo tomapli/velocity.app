@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getAppUrl } from "@/lib/app-url";
 
 export const APIFY_API_BASE_URL = "https://api.apify.com/v2";
 export const APIFY_DATASET_PAGE_SIZE = 1_000;
@@ -123,11 +124,8 @@ export function getApifyWebhookUrl(): string | null {
     return process.env.APIFY_WEBHOOK_URL;
   }
 
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}/api/webhooks/apify/ig-scrapes`;
-  }
-
-  return null;
+  const appUrl = getAppUrl();
+  return appUrl ? `${appUrl}/api/webhooks/apify/ig-scrapes` : null;
 }
 
 function getWebhookConfig(options: StartActorRunOptions): Record<string, unknown> | null {

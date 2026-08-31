@@ -20,4 +20,7 @@ features:
   - title: Contributing
     details: Schema, tests, and local Supabase workflow.
     link: /CONTRIBUTING
+  - title: Cloudflare Workers
+    details: Deploying with OpenNext — queues, secrets, and host differences.
+    link: /runbooks/cloudflare-workers
 ---

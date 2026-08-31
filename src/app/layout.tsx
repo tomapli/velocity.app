@@ -5,11 +5,10 @@ import NextTopLoader from "nextjs-toploader";
 import { Toaster } from "@/components/ui/sonner";
 import { PostHogProvider } from "./posthog-provider";
 import { PostHogPageView } from "./posthog-pageview";
+import { getAppUrl } from "@/lib/app-url";
 import "./globals.css";
 
-const defaultUrl = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : "http://localhost:3000";
+const defaultUrl = getAppUrl() ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),

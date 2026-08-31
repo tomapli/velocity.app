@@ -1,0 +1,53 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Custom entry that wraps the generated OpenNext worker and adds the
+  // Cloudflare Queues consumer (see worker.ts).
+  "main": "./worker.ts",
+  "name": "velocityapp",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      // Self-reference service binding; the service name must match "name".
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "velocityapp"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        // Replaces Vercel Queues for the Meta scrape pipeline (src/lib/meta/scrape-queue.ts).
+        "binding": "META_SCRAPES_QUEUE",
+        "queue": "velocityapp-meta-scrapes"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "velocityapp-meta-scrapes",
+        // Each message is one bounded scrape step that enqueues its successor,
+        // so deliver immediately instead of waiting to fill a batch.
+        "max_batch_size": 10,
+        "max_batch_timeout": 0,
+        // The app acknowledges after META_SCRAPE_MAX_DELIVERY_COUNT (8) failed
+        // deliveries; this is only the safety net for delivery-level failures.
+        "max_retries": 8,
+        "dead_letter_queue": "velocityapp-meta-scrapes-dlq"
+      }
+    ]
+  },
+  "vars": {
+    // Public origin of the deployment; used for Apify webhooks and metadataBase.
+    "APP_URL": "https://velocityapp.example.workers.dev"
+  },
+  // Secrets (set with `wrangler secret put <NAME>`), never in "vars":
+  //   SUPABASE_SERVICE_ROLE_KEY, APIFY_API_TOKEN, APIFY_WEBHOOK_SECRET,
+  //   META_FACEBOOK_APP_SECRET, META_INSTAGRAM_APP_SECRET,
+  //   META_TOKEN_ENCRYPTION_KEY, META_OAUTH_STATE_SECRET, META_SCRAPES_QUEUE_SECRET
+  "observability": {
+    "enabled": true
+  }
+}

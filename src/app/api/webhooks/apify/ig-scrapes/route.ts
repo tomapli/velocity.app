@@ -1,5 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
-
 import { NextResponse } from "next/server";
 
 import type { ApifyWebhookPayload } from "@/lib/apify/client";
@@ -8,6 +6,7 @@ import {
   markScrapeFailedAndAdvance,
   processSucceededApifyRun,
 } from "@/lib/ig/process-apify-run";
+import { hasBearerSecret } from "@/lib/request-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -101,18 +100,7 @@ export async function POST(request: Request) {
 }
 
 function isAuthorized(request: Request): boolean {
-  const secret = process.env.APIFY_WEBHOOK_SECRET;
-  if (!secret) {
-    return false;
-  }
-
-  const expected = `Bearer ${secret}`;
-  const authorization = request.headers.get("authorization");
-  if (!authorization || authorization.length !== expected.length) {
-    return false;
-  }
-
-  return timingSafeEqual(Buffer.from(authorization), Buffer.from(expected));
+  return hasBearerSecret(request, process.env.APIFY_WEBHOOK_SECRET);
 }
 
 function getWebhookRun(
