@@ -6,6 +6,12 @@ export const APIFY_INSTAGRAM_SCRAPER_ACTOR_ID = "apify~instagram-scraper";
 export const APIFY_INSTAGRAM_POST_DETAILS_ACTOR_ID =
   "data-slayer~instagram-post-details";
 export const APIFY_DETAILS_BATCH_SIZE = 100;
+export const APIFY_INSTAGRAM_PROFILE_POSTS_ACTOR_ID =
+  "data-slayer~instagram-posts";
+/** data-slayer/instagram-posts paginates the profile feed in pages of 12 posts. */
+export const APIFY_PROFILE_POSTS_PER_PAGE = 12;
+/** Upper bound of the actor's `maxPages` input. */
+export const APIFY_PROFILE_POSTS_MAX_PAGES = 100;
 
 export interface ApifyActorRun {
   id: string;

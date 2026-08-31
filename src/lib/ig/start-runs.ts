@@ -4,6 +4,7 @@ import { getErrorMessage } from "@/lib/errors";
 import {
   APIFY_DETAILS_BATCH_SIZE,
   APIFY_INSTAGRAM_POST_DETAILS_ACTOR_ID,
+  APIFY_INSTAGRAM_PROFILE_POSTS_ACTOR_ID,
   APIFY_INSTAGRAM_SCRAPER_ACTOR_ID,
   startActorRun,
 } from "@/lib/apify/client";
@@ -12,6 +13,10 @@ import {
   instagramProfileDirectUrl,
   toApifyDateFilter,
 } from "@/lib/apify/instagram-listing";
+import {
+  buildInstagramProfilePostsInput,
+  type InstagramProfilePostsRunInput,
+} from "@/lib/apify/instagram-profile-posts";
 import {
   IG_DEFAULT_REQUESTED_POST_COUNT,
   IG_REQUESTED_POST_COUNT_MAX,
@@ -59,6 +64,21 @@ export async function startListingRun(
       ? { onlyPostsNewerThan: toApifyDateFilter(input.sinceWhen) }
       : {}),
   });
+}
+
+/**
+ * Starts a data-slayer/instagram-posts run that lists the profile feed with
+ * post metrics in one go, so no post-details batches follow.
+ */
+export async function startProfilePostsRun(
+  token: string,
+  input: InstagramProfilePostsRunInput,
+) {
+  return startActorRun(
+    token,
+    APIFY_INSTAGRAM_PROFILE_POSTS_ACTOR_ID,
+    buildInstagramProfilePostsInput(input),
+  );
 }
 
 /**

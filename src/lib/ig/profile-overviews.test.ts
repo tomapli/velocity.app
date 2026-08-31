@@ -30,6 +30,7 @@ function group(id: string, profileId: string, createdAt: string): Group {
     requested_post_count: 12,
     since_when: null,
     data_source: "public",
+    scrape_method: "apify_instagram_scraper",
     meta_connection_id: null,
     meta_instagram_account_id: null,
   };

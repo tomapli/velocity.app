@@ -34,6 +34,7 @@ const OVERVIEW: IgProfileOverview = {
       requested_post_count: 24,
       since_when: null,
       data_source: "public",
+      scrape_method: "apify_instagram_scraper",
       meta_connection_id: null,
       meta_instagram_account_id: null,
     },
@@ -68,7 +69,10 @@ describe("IgProfileList", () => {
       "href",
       "/ig/velocity",
     );
-    expect(screen.getByText("Ready")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ready" })).toHaveAttribute(
+      "href",
+      "/settings/scrapes/group-1",
+    );
     expect(screen.getByText("Public data")).toBeInTheDocument();
     expect(screen.getByText("Velocity · 1,200 followers · 40 posts")).toBeInTheDocument();
     expect(screen.getByText(/2 scrapes · last/)).toBeInTheDocument();
@@ -82,6 +86,6 @@ describe("IgProfileList", () => {
     );
 
     expect(screen.getByText("No scrapes yet")).toBeInTheDocument();
-    expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Ready" })).not.toBeInTheDocument();
   });
 });

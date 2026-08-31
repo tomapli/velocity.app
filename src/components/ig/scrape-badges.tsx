@@ -1,7 +1,14 @@
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import type { IgScrapeStatus } from "@/lib/ig/groups";
 import type { Group } from "@/lib/ig/queries";
+import {
+  IG_SCRAPE_METHOD_ACTOR_LABELS,
+  IG_SCRAPE_METHOD_LABELS,
+  type IgScrapeMethod,
+} from "@/lib/ig/scrape-methods";
 import {
   SCRAPE_DATA_ORIGIN_LABELS,
   type ScheduledScrapeStatus,
@@ -48,21 +55,51 @@ const SCHEDULED_SCRAPE_STATUS_CLASSES: Record<ScheduledScrapeStatus, string> = {
   failed: FAILURE_CLASSES,
 };
 
-/** Combined lifecycle of a scrape (group) derived from all of its requests. */
+/** Decorative spinner: the badge text already names the state. */
+function StatusSpinner() {
+  return <Spinner className="size-3" role="presentation" aria-label={undefined} aria-hidden />;
+}
+
+/**
+ * Combined lifecycle of a scrape (group) derived from all of its requests.
+ * With `href` it renders as a link to the scrape's page.
+ */
 export function ScrapeStatusBadge({
   status,
   className,
+  href,
 }: {
   status: IgScrapeStatus;
   className?: string;
+  href?: string;
 }) {
+  const content = (
+    <>
+      {status === "scraping" ? <StatusSpinner /> : null}
+      {IG_SCRAPE_STATUS_LABELS[status]}
+    </>
+  );
+
+  if (href) {
+    return (
+      <Badge
+        asChild
+        variant="outline"
+        className={cn("gap-1.5", IG_SCRAPE_STATUS_CLASSES[status], className)}
+      >
+        <Link href={href} title="Open scrape details">
+          {content}
+        </Link>
+      </Badge>
+    );
+  }
+
   return (
     <Badge
       variant="outline"
       className={cn("gap-1.5", IG_SCRAPE_STATUS_CLASSES[status], className)}
     >
-      {status === "scraping" ? <Spinner className="size-3" /> : null}
-      {IG_SCRAPE_STATUS_LABELS[status]}
+      {content}
     </Badge>
   );
 }
@@ -74,7 +111,7 @@ export function RequestStatusBadge({ status }: { status: ScheduledScrapeStatus }
       variant="outline"
       className={cn("gap-1.5", SCHEDULED_SCRAPE_STATUS_CLASSES[status])}
     >
-      {status === "running" ? <Spinner className="size-3" /> : null}
+      {status === "running" ? <StatusSpinner /> : null}
       {SCHEDULED_SCRAPE_STATUS_LABELS[status]}
     </Badge>
   );
@@ -83,6 +120,15 @@ export function RequestStatusBadge({ status }: { status: ScheduledScrapeStatus }
 /** Which data sources a scrape was configured with. */
 export function DataSourceBadge({ dataSource }: { dataSource: Group["data_source"] }) {
   return <Badge variant="outline">{DATA_SOURCE_LABELS[dataSource]}</Badge>;
+}
+
+/** Which Apify pipeline a scrape uses for its public post data. */
+export function ScrapeMethodBadge({ method }: { method: IgScrapeMethod }) {
+  return (
+    <Badge variant="outline" title={IG_SCRAPE_METHOD_ACTOR_LABELS[method]}>
+      {IG_SCRAPE_METHOD_LABELS[method]}
+    </Badge>
+  );
 }
 
 /** Whether a request downloads public (Apify) or private (Meta API) data. */

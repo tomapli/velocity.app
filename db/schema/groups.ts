@@ -23,6 +23,12 @@ export const igScrapeDataSource = pgEnum("ig_scrape_data_source", [
   "meta_hybrid",
 ]);
 
+/** Which Apify pipeline collects the public post data of a scrape. */
+export const igScrapeMethod = pgEnum("ig_scrape_method", [
+  "apify_instagram_scraper",
+  "data_slayer_instagram_posts",
+]);
+
 export const groups = pgTable(
   "groups",
   {
@@ -35,6 +41,9 @@ export const groups = pgTable(
       mode: "string",
     }),
     dataSource: igScrapeDataSource("data_source").default("public").notNull(),
+    scrapeMethod: igScrapeMethod("scrape_method")
+      .default("apify_instagram_scraper")
+      .notNull(),
     metaConnectionId: uuid("meta_connection_id"),
     metaInstagramAccountId: uuid("meta_instagram_account_id"),
     createdAt: timestamp("created_at", {

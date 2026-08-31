@@ -3,7 +3,13 @@ import { z } from "zod";
 
 import { getErrorMessage } from "@/lib/errors";
 import { buildIgScrapeJobs } from "@/lib/ig/groups";
-import { startListingRun } from "@/lib/ig/start-runs";
+import {
+  IG_DEFAULT_SCRAPE_METHOD,
+  IG_SCRAPE_METHOD,
+  IG_SCRAPE_METHODS,
+  isListingScrapeType,
+} from "@/lib/ig/scrape-methods";
+import { startListingRun, startProfilePostsRun } from "@/lib/ig/start-runs";
 import { upsertIgProfile } from "@/lib/ig/queries";
 import {
   resolveMetaAccountAccess,
@@ -27,6 +33,7 @@ const CreateIgScrapeSchema = z.object({
   sinceWhen: z.string().datetime({ offset: true }).nullable().optional(),
   dataSource: z.enum(["public", "meta_hybrid"]).default("public"),
   metaInstagramAccountId: z.string().uuid().nullable().optional(),
+  scrapeMethod: z.enum(IG_SCRAPE_METHODS).default(IG_DEFAULT_SCRAPE_METHOD),
 }).superRefine((value, context) => {
   if (value.dataSource === "meta_hybrid" && !value.metaInstagramAccountId) {
     context.addIssue({
@@ -93,6 +100,7 @@ export async function POST(request: Request) {
       requested_post_count: requestedPostCount,
       since_when: sinceWhen,
       data_source: parsedBody.data.dataSource,
+      scrape_method: parsedBody.data.scrapeMethod,
       meta_instagram_account_id:
         parsedBody.data.dataSource === "meta_hybrid"
           ? parsedBody.data.metaInstagramAccountId
@@ -107,17 +115,15 @@ export async function POST(request: Request) {
   }
 
   const initialMetaState = metaAccess ? createInitialMetaScrapeState() : null;
+  const listingRows: Insertable<"scheduled_scrapes">[] =
+    parsedBody.data.scrapeMethod === IG_SCRAPE_METHOD.DATA_SLAYER_INSTAGRAM_POSTS
+      ? [{ group_id: group.id, scrape_type: "profile_posts", state: {} }]
+      : [
+          { group_id: group.id, scrape_type: "posts", state: {} },
+          { group_id: group.id, scrape_type: "reels", state: {} },
+        ];
   const scrapeRows: Insertable<"scheduled_scrapes">[] = [
-    {
-      group_id: group.id,
-      scrape_type: "posts",
-      state: {},
-    },
-    {
-      group_id: group.id,
-      scrape_type: "reels",
-      state: {},
-    },
+    ...listingRows,
     ...(initialMetaState
       ? [
           {
@@ -144,17 +150,21 @@ export async function POST(request: Request) {
   try {
     const started = await Promise.all(
       scrapes
-        .filter(
-          (scrape) =>
-            scrape.scrape_type === "posts" || scrape.scrape_type === "reels",
-        )
+        .filter((scrape) => isListingScrapeType(scrape.scrape_type))
         .map(async (scrape) => {
-        const run = await startListingRun(token, {
-          scrapeType: scrape.scrape_type === "reels" ? "reels" : "posts",
-          username: profile.ig_username,
-          requestedPostCount,
-          sinceWhen,
-        });
+        const run =
+          scrape.scrape_type === "profile_posts"
+            ? await startProfilePostsRun(token, {
+                username: profile.ig_username,
+                requestedPostCount,
+                sinceWhen,
+              })
+            : await startListingRun(token, {
+                scrapeType: scrape.scrape_type === "reels" ? "reels" : "posts",
+                username: profile.ig_username,
+                requestedPostCount,
+                sinceWhen,
+              });
         const { data: updated, error: updateError } = await supabase
           .from("scheduled_scrapes")
           .update({

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { ExternalLink, Instagram } from "lucide-react";
 
 import { IgRemoteImage } from "@/components/ig/ig-remote-image";
-import { DataSourceBadge, ScrapeStatusBadge } from "@/components/ig/scrape-badges";
+import { DataSourceBadge } from "@/components/ig/scrape-badges";
+import { ScrapeStatusLink } from "@/components/ig/scrape-status-link";
 import {
   Empty,
   EmptyDescription,
@@ -13,7 +14,6 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { formatIgDateTime } from "@/lib/ig/format";
-import { getIgScrapeJobStatus } from "@/lib/ig/groups";
 import type { IgProfileOverview } from "@/lib/ig/profile-overviews";
 
 interface IgProfileListProps {
@@ -66,7 +66,7 @@ export function IgProfileList({ overviews }: IgProfileListProps) {
                 </Link>
                 {latestJob ? (
                   <>
-                    <ScrapeStatusBadge status={getIgScrapeJobStatus(latestJob)} />
+                    <ScrapeStatusLink job={latestJob} />
                     <DataSourceBadge dataSource={latestJob.group.data_source} />
                   </>
                 ) : null}

@@ -14,6 +14,10 @@ import {
   toInstagramPostDetailsUpdate,
 } from "@/lib/apify/instagram-post-details";
 import {
+  mapInstagramProfilePosts,
+  toProfilePostRow,
+} from "@/lib/apify/instagram-profile-posts";
+import {
   hasInFlightDetailsScrape,
   listingScrapesAreSettled,
   shouldContinueDetails,
@@ -65,6 +69,13 @@ export async function processSucceededApifyRun(
       importedPostCount: imported.updatedCount,
       batchHadOlderPost: imported.batchHadOlderPost,
     };
+  }
+
+  if (scrape.scrape_type === "profile_posts") {
+    const imported = await importProfilePosts(admin, profile, group, scrape, dataset);
+    await finishScrape(admin, scrape.id);
+
+    return { importedPostCount: imported.importedPostCount };
   }
 
   await importListing(admin, profile, group, scrape, dataset);
@@ -133,6 +144,11 @@ export async function advanceApifyGroupPipeline(
   batchHadOlderPost = false,
   batchUpdatedCount = 0,
 ): Promise<{ startedDetails?: boolean; continued?: boolean }> {
+  if (scrape?.scrape_type === "profile_posts") {
+    // The profile-posts run already carries every metric; nothing follows it.
+    return {};
+  }
+
   if (scrape?.scrape_type === "post_details") {
     const continued = await maybeContinueDetails(
       admin,
@@ -220,8 +236,92 @@ async function importListing(
     }
   }
 
-  const importedUrls = new Set(uniquePending.map((post) => post.post_url));
-  const duplicateIds = (existingPosts ?? [])
+  await deleteNonCanonicalDuplicates(
+    admin,
+    existingPosts ?? [],
+    new Set(uniquePending.map((post) => post.post_url)),
+  );
+
+  await applyProfileUpdate(
+    admin,
+    profile,
+    group,
+    dataset.map((item) => mapInstagramListingProfile(item, profile.ig_username)),
+  );
+}
+
+/**
+ * Imports a data-slayer/instagram-posts run: every post arrives with its
+ * metrics, so rows are written as listed and detailed by the same request.
+ */
+async function importProfilePosts(
+  admin: AdminClient,
+  profile: IgProfile,
+  group: Group,
+  scrape: ScheduledScrape,
+  dataset: unknown[],
+): Promise<{ importedPostCount: number }> {
+  const posts = mapInstagramProfilePosts(dataset, {
+    requestedPostCount: group.requested_post_count,
+    sinceWhen: group.since_when,
+  });
+
+  const { data: existingPosts, error: existingPostsError } = await admin
+    .from("ig_posts")
+    .select("*")
+    .eq("ig_profile_id", group.ig_profile_id);
+  if (existingPostsError) {
+    throw existingPostsError;
+  }
+
+  const existingByUrl = new Map(
+    (existingPosts ?? []).map((post) => [getCanonicalInstagramPostUrl(post.post_url), post]),
+  );
+  const rows = posts.map((post) => {
+    const row = toProfilePostRow(group.ig_profile_id, scrape.id, post);
+    const existing = existingByUrl.get(post.post_url);
+    if (!existing) {
+      return row;
+    }
+    return {
+      ...row,
+      ...mergeApifyDetails(existing, toInstagramPostDetailsUpdate(post)),
+    };
+  });
+
+  for (let index = 0; index < rows.length; index += UPSERT_BATCH_SIZE) {
+    const { error } = await admin.from("ig_posts").upsert(
+      rows.slice(index, index + UPSERT_BATCH_SIZE),
+      { onConflict: "ig_profile_id,post_url" },
+    );
+    if (error) {
+      throw error;
+    }
+  }
+
+  await deleteNonCanonicalDuplicates(
+    admin,
+    existingPosts ?? [],
+    new Set(posts.map((post) => post.post_url)),
+  );
+
+  await applyProfileUpdate(
+    admin,
+    profile,
+    group,
+    dataset.map((item) => mapInstagramDetailsProfile(item, profile.ig_username)),
+  );
+
+  return { importedPostCount: rows.length };
+}
+
+/** Removes legacy `/reel/` rows whose canonical `/p/` twin was just imported. */
+async function deleteNonCanonicalDuplicates(
+  admin: AdminClient,
+  existingPosts: IgPostRow[],
+  importedUrls: ReadonlySet<string>,
+): Promise<void> {
+  const duplicateIds = existingPosts
     .filter((post) => {
       const canonicalUrl = getCanonicalInstagramPostUrl(post.post_url);
       return importedUrls.has(canonicalUrl) && post.post_url !== canonicalUrl;
@@ -237,20 +337,28 @@ async function importListing(
       throw error;
     }
   }
+}
 
-  const profileUpdate = dataset
-    .map((item) => mapInstagramListingProfile(item, profile.ig_username))
-    .find((value) => Object.values(value).some((entry) => entry != null));
-  if (profileUpdate) {
-    const { error } = await admin
-      .from("ig_profiles")
-      .update(
-        mergeApifyProfileUpdate(profile, profileUpdate, group.data_source),
-      )
-      .eq("id", profile.id);
-    if (error) {
-      throw error;
-    }
+/** Applies the first non-empty profile update found in a dataset. */
+async function applyProfileUpdate(
+  admin: AdminClient,
+  profile: IgProfile,
+  group: Group,
+  candidates: Updatable<"ig_profiles">[],
+): Promise<void> {
+  const profileUpdate = candidates.find((value) =>
+    Object.values(value).some((entry) => entry != null),
+  );
+  if (!profileUpdate) {
+    return;
+  }
+
+  const { error } = await admin
+    .from("ig_profiles")
+    .update(mergeApifyProfileUpdate(profile, profileUpdate, group.data_source))
+    .eq("id", profile.id);
+  if (error) {
+    throw error;
   }
 }
 
@@ -323,20 +431,12 @@ async function importDetails(
     }
   }
 
-  const profileUpdate = dataset
-    .map((item) => mapInstagramDetailsProfile(item, profile.ig_username))
-    .find((value) => Object.values(value).some((entry) => entry != null));
-  if (profileUpdate) {
-    const { error } = await admin
-      .from("ig_profiles")
-      .update(
-        mergeApifyProfileUpdate(profile, profileUpdate, group.data_source),
-      )
-      .eq("id", profile.id);
-    if (error) {
-      throw error;
-    }
-  }
+  await applyProfileUpdate(
+    admin,
+    profile,
+    group,
+    dataset.map((item) => mapInstagramDetailsProfile(item, profile.ig_username)),
+  );
 
   return { updatedCount, batchHadOlderPost };
 }

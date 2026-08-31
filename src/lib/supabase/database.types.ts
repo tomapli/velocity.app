@@ -43,6 +43,7 @@ export type Database = {
           meta_connection_id: string | null
           meta_instagram_account_id: string | null
           requested_post_count: number | null
+          scrape_method: Database["public"]["Enums"]["ig_scrape_method"]
           since_when: string | null
         }
         Insert: {
@@ -54,6 +55,7 @@ export type Database = {
           meta_connection_id?: string | null
           meta_instagram_account_id?: string | null
           requested_post_count?: number | null
+          scrape_method?: Database["public"]["Enums"]["ig_scrape_method"]
           since_when?: string | null
         }
         Update: {
@@ -65,6 +67,7 @@ export type Database = {
           meta_connection_id?: string | null
           meta_instagram_account_id?: string | null
           requested_post_count?: number | null
+          scrape_method?: Database["public"]["Enums"]["ig_scrape_method"]
           since_when?: string | null
         }
         Relationships: [
@@ -471,8 +474,14 @@ export type Database = {
     Enums: {
       ig_post_media_type: "carousel" | "short" | "static"
       ig_scrape_data_source: "public" | "meta_hybrid"
+      ig_scrape_method: "apify_instagram_scraper" | "data_slayer_instagram_posts"
       meta_oauth_provider: "facebook" | "instagram"
-      scheduled_scrape_type: "posts" | "reels" | "post_details" | "meta"
+      scheduled_scrape_type:
+        | "posts"
+        | "reels"
+        | "post_details"
+        | "meta"
+        | "profile_posts"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -602,8 +611,15 @@ export const Constants = {
     Enums: {
       ig_post_media_type: ["carousel", "short", "static"],
       ig_scrape_data_source: ["public", "meta_hybrid"],
+      ig_scrape_method: ["apify_instagram_scraper", "data_slayer_instagram_posts"],
       meta_oauth_provider: ["facebook", "instagram"],
-      scheduled_scrape_type: ["posts", "reels", "post_details", "meta"],
+      scheduled_scrape_type: [
+        "posts",
+        "reels",
+        "post_details",
+        "meta",
+        "profile_posts",
+      ],
     },
   },
 } as const

@@ -8,8 +8,16 @@ import { Instagram, LoaderCircle } from "lucide-react";
 import { IgPostsTable } from "@/components/ig/ig-posts-table";
 import { IgPostsAutoLoader } from "@/components/ig/ig-posts-auto-loader";
 import { IgPostsToolbar } from "@/components/ig/ig-posts-toolbar";
-import { DataSourceBadge, ScrapeStatusBadge } from "@/components/ig/scrape-badges";
-import { ScrapeParamsDialog } from "@/components/ig/scrape-params-dialog";
+import {
+  DataSourceBadge,
+  ScrapeMethodBadge,
+  ScrapeStatusBadge,
+} from "@/components/ig/scrape-badges";
+import { ScrapeStatusLink } from "@/components/ig/scrape-status-link";
+import {
+  ScrapeParamsDialog,
+  type ScrapeParamsConfirmPayload,
+} from "@/components/ig/scrape-params-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -332,12 +340,7 @@ export function IgProfilePageClient({
     setParamsDialogOpen(true);
   };
 
-  const handleSchedule = async (payload: {
-    requestedPostCount: number | null;
-    sinceWhen: string | null;
-    dataSource: "public" | "meta_hybrid";
-    metaInstagramAccountId: string | null;
-  }) => {
+  const handleSchedule = async (payload: ScrapeParamsConfirmPayload) => {
     setIsScheduling(true);
     try {
       const created = await scheduleIgScrape({
@@ -346,6 +349,7 @@ export function IgProfilePageClient({
         sinceWhen: payload.sinceWhen,
         dataSource: payload.dataSource,
         metaInstagramAccountId: payload.metaInstagramAccountId,
+        scrapeMethod: payload.scrapeMethod,
       });
 
       setProfile(created.profile);
@@ -463,7 +467,12 @@ export function IgProfilePageClient({
         action={
           <div className="flex items-center gap-2">
             {job ? <DataSourceBadge dataSource={job.group.data_source} /> : null}
-            <ScrapeStatusBadge status={status} />
+            {job ? <ScrapeMethodBadge method={job.group.scrape_method} /> : null}
+            {job ? (
+              <ScrapeStatusLink job={job} />
+            ) : (
+              <ScrapeStatusBadge status={status} />
+            )}
           </div>
         }
       />

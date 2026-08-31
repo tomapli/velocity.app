@@ -233,7 +233,7 @@ async function loadMetaScrape(
         .from("scheduled_scrapes")
         .select("*")
         .eq("group_id", group.id)
-        .in("scrape_type", ["posts", "reels"]),
+        .in("scrape_type", ["posts", "reels", "profile_posts"]),
       loadStoredMetaAccountAccess(admin, group.meta_instagram_account_id),
     ]);
   if (profileError) {

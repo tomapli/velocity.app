@@ -31,6 +31,7 @@ export const SCRAPE_TYPE_LABELS: Record<ScheduledScrapeType, string> = {
   reels: "Reels listing",
   post_details: "Post details",
   meta: "Meta insights",
+  profile_posts: "Profile posts",
 };
 
 export const SCRAPE_TYPE_DESCRIPTIONS: Record<ScheduledScrapeType, string> = {
@@ -38,6 +39,8 @@ export const SCRAPE_TYPE_DESCRIPTIONS: Record<ScheduledScrapeType, string> = {
   reels: "Apify run listing the profile's recent reels.",
   post_details: `Apify run enriching up to ${APIFY_DETAILS_BATCH_SIZE} listed posts with detailed metrics.`,
   meta: "Meta Graph API steps: media, then profile, then account insights.",
+  profile_posts:
+    "Apify run (data-slayer/instagram-posts) listing the profile's posts and reels with their metrics in one go.",
 };
 
 export const SCRAPE_DATA_ORIGIN_LABELS: Record<ScrapeDataOrigin, string> = {
@@ -103,6 +106,24 @@ export function getScheduledScrapeProgress(
     return getMetaScrapeProgress(state, scrape.finished_at != null);
   }
 
+  return null;
+}
+
+const STATUS_FOCUS_ORDER: ScheduledScrapeStatus[] = ["failed", "running", "queued", "done"];
+
+/** The request most worth looking at first: failures, then in-flight work, then the latest. */
+export function pickFocusScheduledScrape(
+  scrapes: ScheduledScrape[],
+): ScheduledScrape | null {
+  for (const status of STATUS_FOCUS_ORDER) {
+    const match =
+      status === "done"
+        ? scrapes.at(-1)
+        : scrapes.find((scrape) => getScheduledScrapeStatus(scrape) === status);
+    if (match) {
+      return match;
+    }
+  }
   return null;
 }
 

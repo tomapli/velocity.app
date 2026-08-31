@@ -1,4 +1,8 @@
 import type { IgScrapeJob } from "@/lib/ig/groups";
+import {
+  IG_DEFAULT_SCRAPE_METHOD,
+  type IgScrapeMethod,
+} from "@/lib/ig/scrape-methods";
 
 const IG_SCRAPES_API_PATH = "/api/ig/scrapes";
 
@@ -8,6 +12,7 @@ export interface ScheduleIgScrapeInput {
   sinceWhen?: string | null;
   dataSource?: "public" | "meta_hybrid";
   metaInstagramAccountId?: string | null;
+  scrapeMethod?: IgScrapeMethod;
 }
 
 interface ScheduleIgScrapeResponse {
@@ -30,6 +35,7 @@ export async function scheduleIgScrape(
       sinceWhen: input.sinceWhen ?? null,
       dataSource: input.dataSource ?? "public",
       metaInstagramAccountId: input.metaInstagramAccountId ?? null,
+      scrapeMethod: input.scrapeMethod ?? IG_DEFAULT_SCRAPE_METHOD,
     }),
   });
   const payload = await getResponsePayload(response);

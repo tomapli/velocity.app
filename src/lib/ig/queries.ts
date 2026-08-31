@@ -178,6 +178,49 @@ export async function listIgScrapeJobs(
 }
 
 /**
+ * Loads one scrape (group) with its profile and requests, or null when missing.
+ */
+export async function getIgScrapeJobById(
+  supabase: SupabaseClient<Database>,
+  groupId: string,
+): Promise<IgScrapeJob | null> {
+  const { data: group, error: groupError } = await supabase
+    .from("groups")
+    .select("*")
+    .eq("id", groupId)
+    .maybeSingle();
+
+  if (groupError) {
+    return throwQueryError(groupError);
+  }
+  if (!group) {
+    return null;
+  }
+
+  const [
+    { data: profile, error: profileError },
+    { data: scrapes, error: scrapesError },
+  ] = await Promise.all([
+    supabase.from("ig_profiles").select("*").eq("id", group.ig_profile_id).maybeSingle(),
+    supabase.from("scheduled_scrapes").select("*").eq("group_id", group.id),
+  ]);
+
+  if (profileError) {
+    return throwQueryError(profileError);
+  }
+  if (scrapesError) {
+    return throwQueryError(scrapesError);
+  }
+  if (!profile) {
+    return null;
+  }
+
+  return (
+    buildIgScrapeJobs([group], scrapes ?? [], new Map([[profile.id, profile]]))[0] ?? null
+  );
+}
+
+/**
  * Loads a profile by Instagram username.
  */
 export async function getIgProfileByUsername(

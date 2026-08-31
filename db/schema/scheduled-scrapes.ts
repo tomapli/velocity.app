@@ -21,6 +21,7 @@ export const scheduledScrapeType = pgEnum("scheduled_scrape_type", [
   "reels",
   "post_details",
   "meta",
+  "profile_posts",
 ]);
 
 export const scheduledScrapes = pgTable(

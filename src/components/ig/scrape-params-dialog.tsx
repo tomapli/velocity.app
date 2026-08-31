@@ -24,6 +24,13 @@ import {
   IG_REQUESTED_POST_COUNT_MAX,
 } from "@/lib/ig/constants";
 import {
+  IG_SCRAPE_METHOD_ACTOR_LABELS,
+  IG_SCRAPE_METHOD_DESCRIPTIONS,
+  IG_SCRAPE_METHOD_LABELS,
+  IG_SCRAPE_METHODS,
+  type IgScrapeMethod,
+} from "@/lib/ig/scrape-methods";
+import {
   META_CONNECTIONS_API_PATH,
   META_OAUTH_MESSAGE_TYPE,
 } from "@/lib/meta/constants";
@@ -40,6 +47,12 @@ export interface ScrapeParamsConfirmPayload {
   sinceWhen: string | null;
   dataSource: "public" | "meta_hybrid";
   metaInstagramAccountId: string | null;
+  scrapeMethod: IgScrapeMethod;
+}
+
+interface ScrapeRangePayload {
+  requestedPostCount: number | null;
+  sinceWhen: string | null;
 }
 
 interface ScrapeParamsDialogProps {
@@ -51,8 +64,15 @@ interface ScrapeParamsDialogProps {
   onConfirm: (payload: ScrapeParamsConfirmPayload) => void;
 }
 
-type DialogStep = "source" | "params";
+type DialogStep = "source" | "params" | "method";
 type ScrapeParamsMode = "post_count" | "since_when";
+
+const STEP_DESCRIPTIONS: Record<DialogStep, string> = {
+  source:
+    "Use private Meta insights when this workspace has access, or deliberately continue with public data.",
+  params: "Choose how many posts to collect, or a start date to collect posts from.",
+  method: "Choose which Apify pipeline downloads the public post data.",
+};
 
 interface OauthMessage {
   type: typeof META_OAUTH_MESSAGE_TYPE;
@@ -60,7 +80,7 @@ interface OauthMessage {
   message: string;
 }
 
-/** Two-step source and scrape-range flow shown after the Instagram tab detour. */
+/** Three-step source, range, and method flow shown after the Instagram tab detour. */
 export function ScrapeParamsDialog({
   open,
   onOpenChange,
@@ -78,6 +98,7 @@ export function ScrapeParamsDialog({
   const [isLoadingConnections, setIsLoadingConnections] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<"public" | "meta_hybrid" | null>(null);
+  const [scrapeMethod, setScrapeMethod] = useState<IgScrapeMethod | null>(null);
   const postCountRef = useRef<HTMLInputElement>(null);
   const sinceWhenRef = useRef<HTMLInputElement>(null);
 
@@ -119,6 +140,7 @@ export function ScrapeParamsDialog({
     setLookupError(null);
     setSelectedAccountId(null);
     setDataSource(null);
+    setScrapeMethod(null);
     void loadConnections();
   }, [loadConnections, open]);
 
@@ -158,35 +180,55 @@ export function ScrapeParamsDialog({
     window.open(url, "velocity-meta-oauth", "popup,width=620,height=760");
   };
 
+  /** Validates the range step, focusing the offending input on failure. */
+  const getRangePayload = (): ScrapeRangePayload | null => {
+    if (isUrlInput || mode === "post_count") {
+      const parsed = Number.parseInt(postCount, 10);
+      if (!Number.isFinite(parsed) || parsed < 1 || parsed > IG_REQUESTED_POST_COUNT_MAX) {
+        postCountRef.current?.focus();
+        return null;
+      }
+      return { requestedPostCount: parsed, sinceWhen: null };
+    }
+
+    if (!sinceWhen) {
+      sinceWhenRef.current?.focus();
+      return null;
+    }
+    return {
+      requestedPostCount: null,
+      sinceWhen: new Date(`${sinceWhen}T00:00:00`).toISOString(),
+    };
+  };
+
+  const handleContinueToMethod = () => {
+    if (!dataSource) {
+      setStep("source");
+      return;
+    }
+    if (getRangePayload()) {
+      setStep("method");
+    }
+  };
+
   const handleConfirm = () => {
     if (!dataSource) {
       setStep("source");
       return;
     }
-    if (isUrlInput || mode === "post_count") {
-      const parsed = Number.parseInt(postCount, 10);
-      if (!Number.isFinite(parsed) || parsed < 1 || parsed > IG_REQUESTED_POST_COUNT_MAX) {
-        postCountRef.current?.focus();
-        return;
-      }
-      onConfirm({
-        requestedPostCount: parsed,
-        sinceWhen: null,
-        dataSource,
-        metaInstagramAccountId: dataSource === "meta_hybrid" ? selectedAccountId : null,
-      });
+    const range = getRangePayload();
+    if (!range) {
+      setStep("params");
       return;
     }
-
-    if (!sinceWhen) {
-      sinceWhenRef.current?.focus();
+    if (!scrapeMethod) {
       return;
     }
     onConfirm({
-      requestedPostCount: null,
-      sinceWhen: new Date(`${sinceWhen}T00:00:00`).toISOString(),
+      ...range,
       dataSource,
       metaInstagramAccountId: dataSource === "meta_hybrid" ? selectedAccountId : null,
+      scrapeMethod,
     });
   };
 
@@ -194,16 +236,13 @@ export function ScrapeParamsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Badge variant={step === "source" ? "default" : "outline"}>1 · Data source</Badge>
             <Badge variant={step === "params" ? "default" : "outline"}>2 · Range</Badge>
+            <Badge variant={step === "method" ? "default" : "outline"}>3 · Method</Badge>
           </div>
           <DialogTitle>Scrape @{username}</DialogTitle>
-          <DialogDescription>
-            {step === "source"
-              ? "Use private Meta insights when this workspace has access, or deliberately continue with public data."
-              : "Choose the same post limit or start date used by the public-data workflow."}
-          </DialogDescription>
+          <DialogDescription>{STEP_DESCRIPTIONS[step]}</DialogDescription>
         </DialogHeader>
 
         {step === "source" ? (
@@ -232,7 +271,7 @@ export function ScrapeParamsDialog({
               setStep("params");
             }}
           />
-        ) : (
+        ) : step === "params" ? (
           <ParamsStep
             dataSource={dataSource!}
             isUrlInput={isUrlInput}
@@ -244,7 +283,14 @@ export function ScrapeParamsDialog({
             onModeChange={setMode}
             onPostCountChange={setPostCount}
             onSinceWhenChange={setSinceWhen}
-            onConfirm={handleConfirm}
+            onContinue={handleContinueToMethod}
+          />
+        ) : (
+          <MethodStep
+            dataSource={dataSource!}
+            isSubmitting={isSubmitting}
+            scrapeMethod={scrapeMethod}
+            onSelectMethod={setScrapeMethod}
           />
         )}
 
@@ -253,7 +299,22 @@ export function ScrapeParamsDialog({
             <Button type="button" variant="outline" onClick={() => setStep("source")} disabled={isSubmitting}>
               Back
             </Button>
-            <Button type="button" onClick={handleConfirm} disabled={isSubmitting}>
+            <Button type="button" onClick={handleContinueToMethod} disabled={isSubmitting}>
+              Continue
+            </Button>
+          </DialogFooter>
+        ) : null}
+
+        {step === "method" ? (
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setStep("params")} disabled={isSubmitting}>
+              Back
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirm}
+              disabled={isSubmitting || !scrapeMethod}
+            >
               {isSubmitting ? "Scheduling…" : "Confirm"}
             </Button>
           </DialogFooter>
@@ -391,7 +452,7 @@ function ParamsStep({
   onModeChange,
   onPostCountChange,
   onSinceWhenChange,
-  onConfirm,
+  onContinue,
 }: {
   dataSource: "public" | "meta_hybrid";
   isUrlInput: boolean;
@@ -403,7 +464,7 @@ function ParamsStep({
   onModeChange: (mode: ScrapeParamsMode) => void;
   onPostCountChange: (value: string) => void;
   onSinceWhenChange: (value: string) => void;
-  onConfirm: () => void;
+  onContinue: () => void;
 }) {
   return (
     <div
@@ -411,7 +472,7 @@ function ParamsStep({
       onKeyDown={(event) => {
         if (event.key === "Enter") {
           event.preventDefault();
-          onConfirm();
+          onContinue();
         }
       }}
     >
@@ -459,6 +520,60 @@ function ParamsStep({
           </div>
         </>
       ) : null}
+    </div>
+  );
+}
+
+function MethodStep({
+  dataSource,
+  isSubmitting,
+  scrapeMethod,
+  onSelectMethod,
+}: {
+  dataSource: "public" | "meta_hybrid";
+  isSubmitting: boolean;
+  scrapeMethod: IgScrapeMethod | null;
+  onSelectMethod: (method: IgScrapeMethod) => void;
+}) {
+  return (
+    <div className="space-y-4 py-2">
+      <Badge variant="outline">
+        {dataSource === "meta_hybrid" ? "Meta + public data" : "Public data"}
+      </Badge>
+      <div className="space-y-2" role="radiogroup" aria-label="Scrape method">
+        <Label>How to scrape public data</Label>
+        {IG_SCRAPE_METHODS.map((method) => {
+          const selected = scrapeMethod === method;
+          return (
+            <Button
+              key={method}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              variant="outline"
+              className={cn(
+                "h-auto w-full items-start justify-start gap-3 p-3 text-left whitespace-normal",
+                selected && "border-foreground bg-accent dark:border-foreground dark:bg-accent",
+              )}
+              onClick={() => onSelectMethod(method)}
+              disabled={isSubmitting}
+            >
+              <span className="min-w-0 flex-1 space-y-1">
+                <span className="block text-sm font-medium">
+                  {IG_SCRAPE_METHOD_LABELS[method]}
+                </span>
+                <span className="block font-mono text-xs text-muted-foreground">
+                  {IG_SCRAPE_METHOD_ACTOR_LABELS[method]}
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {IG_SCRAPE_METHOD_DESCRIPTIONS[method]}
+                </span>
+              </span>
+              {selected ? <Check className="size-4 shrink-0" /> : null}
+            </Button>
+          );
+        })}
+      </div>
     </div>
   );
 }

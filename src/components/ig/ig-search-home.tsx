@@ -149,6 +149,7 @@ export function IgSearchHome({ initialSnapshot }: IgSearchHomeProps) {
         sinceWhen: payload.sinceWhen,
         dataSource: payload.dataSource,
         metaInstagramAccountId: payload.metaInstagramAccountId,
+        scrapeMethod: payload.scrapeMethod,
       });
 
       upsertProfile(job.profile);

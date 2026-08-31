@@ -17,32 +17,14 @@ import {
   getScrapeDataOrigin,
 } from "@/lib/ig/scrape-requests";
 
-interface ScrapeRequestListProps {
-  scrapes: ScheduledScrape[];
+interface ScrapeRequestDetailsProps {
+  scrape: ScheduledScrape;
 }
 
 /**
- * Lists every request a scrape sent to Apify or the Meta API with its live state.
+ * Full detail of one request sent to Apify or the Meta API, with its live state.
  */
-export function ScrapeRequestList({ scrapes }: ScrapeRequestListProps) {
-  if (scrapes.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No requests were created for this scrape yet.
-      </p>
-    );
-  }
-
-  return (
-    <ol className="space-y-3">
-      {scrapes.map((scrape) => (
-        <ScrapeRequestItem key={scrape.id} scrape={scrape} />
-      ))}
-    </ol>
-  );
-}
-
-function ScrapeRequestItem({ scrape }: { scrape: ScheduledScrape }) {
+export function ScrapeRequestDetails({ scrape }: ScrapeRequestDetailsProps) {
   const status = getScheduledScrapeStatus(scrape);
   const progress = getScheduledScrapeProgress(scrape);
   const errorMessage = getScheduledScrapeErrorMessage(scrape);
@@ -51,7 +33,7 @@ function ScrapeRequestItem({ scrape }: { scrape: ScheduledScrape }) {
   const duration = formatIgDuration(startedAt, scrape.finished_at);
 
   return (
-    <li className="space-y-3 rounded-lg border bg-card p-3">
+    <div className="space-y-3 rounded-lg border bg-card p-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium">{SCRAPE_TYPE_LABELS[scrape.scrape_type]}</span>
         <DataOriginBadge origin={getScrapeDataOrigin(scrape)} />
@@ -126,6 +108,6 @@ function ScrapeRequestItem({ scrape }: { scrape: ScheduledScrape }) {
           {status === "failed" ? errorMessage : `Last attempt failed, retrying: ${errorMessage}`}
         </p>
       ) : null}
-    </li>
+    </div>
   );
 }
