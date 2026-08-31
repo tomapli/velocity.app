@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Settings } from "lucide-react";
+import { ListChecks, Settings } from "lucide-react";
 import { toast } from "sonner";
 
 import { CopilotSearchBar } from "@/components/ig/copilot-search-bar";
@@ -12,24 +12,21 @@ import {
   ScrapeParamsDialog,
   type ScrapeParamsConfirmPayload,
 } from "@/components/ig/scrape-params-dialog";
-import { ScrapeHistory } from "@/components/ig/scrape-history";
+import { IgProfileList } from "@/components/ig/ig-profile-list";
 import {
   dequeuePendingIgScrape,
   enqueuePendingIgScrape,
   readPendingIgScrapes,
   type PendingIgScrape,
 } from "@/lib/ig/pending-scrapes";
-import {
-  buildIgScrapeJobs,
-  upsertGroup,
-  upsertScheduledScrape,
-  type IgScrapeJob,
-} from "@/lib/ig/groups";
+import { upsertGroup, upsertScheduledScrape } from "@/lib/ig/groups";
 import { instagramProfileUrl } from "@/lib/ig/parse-input";
+import { buildIgProfileOverviews } from "@/lib/ig/profile-overviews";
 import {
   getIgProfileByUsername,
   type Group,
   type IgProfile,
+  type IgScrapeSnapshot,
   type ScheduledScrape,
 } from "@/lib/ig/queries";
 import { scheduleIgScrape } from "@/lib/ig/schedule-scrape";
@@ -38,35 +35,24 @@ import { useIgScrapesRealtime } from "@/lib/ig/use-ig-scrapes-realtime";
 import { createClient } from "@/lib/supabase/client";
 
 interface IgSearchHomeProps {
-  initialJobs: IgScrapeJob[];
+  initialSnapshot: IgScrapeSnapshot;
 }
 
 /**
  * Home screen for searching Instagram profiles and scheduling scrapes.
  */
-export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
+export function IgSearchHome({ initialSnapshot }: IgSearchHomeProps) {
   const router = useRouter();
-  const [groups, setGroups] = useState<Group[]>(() =>
-    initialJobs.map((job) => job.group),
-  );
-  const [profiles, setProfiles] = useState<IgProfile[]>(() =>
-    initialJobs.map((job) => job.profile),
-  );
-  const [scrapes, setScrapes] = useState<ScheduledScrape[]>(() =>
-    initialJobs.flatMap((job) => job.scrapes),
-  );
+  const [groups, setGroups] = useState<Group[]>(initialSnapshot.groups);
+  const [profiles, setProfiles] = useState<IgProfile[]>(initialSnapshot.profiles);
+  const [scrapes, setScrapes] = useState<ScheduledScrape[]>(initialSnapshot.scrapes);
   const [query, setQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [activeDialog, setActiveDialog] = useState<PendingIgScrape | null>(null);
   const [isScheduling, setIsScheduling] = useState(false);
 
-  const jobs = useMemo(
-    () =>
-      buildIgScrapeJobs(
-        groups,
-        scrapes,
-        new Map(profiles.map((profile) => [profile.id, profile])),
-      ),
+  const overviews = useMemo(
+    () => buildIgProfileOverviews(profiles, groups, scrapes),
     [groups, profiles, scrapes],
   );
 
@@ -204,18 +190,21 @@ export function IgSearchHome({ initialJobs }: IgSearchHomeProps) {
       <section className="mx-auto w-full max-w-3xl space-y-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Global history
+            Profiles
           </h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-muted-foreground">
-              {jobs.length} {jobs.length === 1 ? "search" : "searches"}
+              {overviews.length} {overviews.length === 1 ? "profile" : "profiles"}
             </span>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/settings/scrapes"><ListChecks />Manage scrapes</Link>
+            </Button>
             <Button asChild variant="ghost" size="sm">
               <Link href="/settings/meta"><Settings />Meta connections</Link>
             </Button>
           </div>
         </div>
-        <ScrapeHistory jobs={jobs} />
+        <IgProfileList overviews={overviews} />
       </section>
 
       <ScrapeParamsDialog

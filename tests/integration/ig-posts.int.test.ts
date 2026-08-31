@@ -74,6 +74,96 @@ describe("ig_posts", () => {
     });
   });
 
+  describe("derived metric columns", () => {
+    it("computes sortable rates from the stored counts", async () => {
+      await withRollback(async (client) => {
+        const auth = await insertAuthUser(client);
+        const ids = await insertSourceScrape(client, auth.id);
+        await asClaims(client, { sub: auth.id });
+
+        const { rows } = await client.query(
+          `insert into public.ig_posts (
+             ig_profile_id, source_scrape_id, post_url, description,
+             view_count, like_count, comment_count, save_count, share_count, follows_count
+           )
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           returning
+             description_length as "descriptionLength",
+             engagement_rate as "engagementRate",
+             weighted_engagement_rate as "weightedEngagementRate",
+             save_rate as "saveRate",
+             share_rate as "shareRate",
+             comment_rate as "commentRate",
+             like_rate as "likeRate",
+             follows_per_1k_views as "followsPer1kViews"`,
+          [ids.profileId, ids.scrapeId, POST_URL, "Hello", 1000, 100, 20, 40, 30, 5],
+        );
+
+        expect(rows[0]).toEqual({
+          descriptionLength: 5,
+          engagementRate: 19,
+          weightedEngagementRate: 39,
+          saveRate: 4,
+          shareRate: 3,
+          commentRate: 2,
+          likeRate: 10,
+          followsPer1kViews: 5,
+        });
+      });
+    });
+
+    it("leaves rates null without views or engagement counts", async () => {
+      await withRollback(async (client) => {
+        const auth = await insertAuthUser(client);
+        const ids = await insertSourceScrape(client, auth.id);
+        await asClaims(client, { sub: auth.id });
+
+        const { rows } = await client.query(
+          `insert into public.ig_posts (
+             ig_profile_id, source_scrape_id, post_url, view_count, like_count
+           )
+           values ($1, $2, $3, $4, $5), ($1, $2, $6, $7, $8)
+           returning
+             post_url as "postUrl",
+             description_length as "descriptionLength",
+             engagement_rate as "engagementRate",
+             weighted_engagement_rate as "weightedEngagementRate",
+             like_rate as "likeRate",
+             save_rate as "saveRate"`,
+          [
+            ids.profileId,
+            ids.scrapeId,
+            POST_URL,
+            0,
+            100,
+            "https://www.instagram.com/p/DEF456xyz/",
+            1000,
+            null,
+          ],
+        );
+
+        expect(rows).toEqual([
+          {
+            postUrl: POST_URL,
+            descriptionLength: null,
+            engagementRate: null,
+            weightedEngagementRate: null,
+            likeRate: null,
+            saveRate: null,
+          },
+          {
+            postUrl: "https://www.instagram.com/p/DEF456xyz/",
+            descriptionLength: null,
+            engagementRate: null,
+            weightedEngagementRate: null,
+            likeRate: null,
+            saveRate: null,
+          },
+        ]);
+      });
+    });
+  });
+
   describe("constraints", () => {
     it("stores a pending URL before details are scraped", async () => {
       await withRollback(async (client) => {

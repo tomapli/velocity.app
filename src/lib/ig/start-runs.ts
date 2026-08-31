@@ -16,14 +16,16 @@ import {
   IG_DEFAULT_REQUESTED_POST_COUNT,
   IG_REQUESTED_POST_COUNT_MAX,
 } from "@/lib/ig/constants";
+import {
+  DETAILS_SCRAPE_STATE_POST_URLS_KEY,
+  getDetailsScrapePostUrls,
+} from "@/lib/ig/details-scrape-state";
 import type { Database } from "@/lib/supabase/database.types";
 import type { Tables } from "@/lib/supabase/tables";
 
 type AppSupabase = SupabaseClient<Database>;
 type Group = Tables<"groups">;
 type ScheduledScrape = Tables<"scheduled_scrapes">;
-
-const DETAILS_SCRAPE_STATE_POST_URLS_KEY = "postUrls";
 
 export interface PendingDetailsPost {
   id: string;
@@ -317,17 +319,6 @@ export function getAttemptedDetailsShortcodes(
   }
 
   return shortcodes;
-}
-
-function getDetailsScrapePostUrls(state: ScheduledScrape["state"]): string[] {
-  if (!state || typeof state !== "object" || Array.isArray(state)) {
-    return [];
-  }
-
-  const postUrls = state[DETAILS_SCRAPE_STATE_POST_URLS_KEY];
-  return Array.isArray(postUrls)
-    ? postUrls.filter((postUrl): postUrl is string => typeof postUrl === "string")
-    : [];
 }
 
 async function ownsDetailsBatch(

@@ -52,11 +52,11 @@ export function IgPostsAutoLoader({
           className="inline-flex items-center gap-2 text-sm text-muted-foreground"
         >
           <LoaderCircle className="animate-spin" aria-hidden />
-          Loading older posts…
+          Loading more posts…
         </span>
       ) : (
         <Button type="button" variant="outline" onClick={onLoadMore}>
-          Load {IG_POSTS_PAGE_SIZE} older posts
+          Load {IG_POSTS_PAGE_SIZE} more posts
         </Button>
       )}
     </div>

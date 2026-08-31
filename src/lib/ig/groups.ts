@@ -92,6 +92,29 @@ export function getIgScrapeJobStatus(job: IgScrapeJob): IgScrapeStatus {
   return "ready";
 }
 
+export interface IgScrapeJobProgress {
+  finished: number;
+  total: number;
+  /** 0–100; a scrape with no requests yet reports 0. */
+  percent: number;
+}
+
+const PERCENT_MAX = 100;
+
+/**
+ * Counts settled requests (finished or failed) against every request in the scrape.
+ */
+export function getIgScrapeJobProgress(job: IgScrapeJob): IgScrapeJobProgress {
+  const total = job.scrapes.length;
+  const finished = job.scrapes.filter((scrape) => scrape.finished_at).length;
+
+  return {
+    finished,
+    total,
+    percent: total === 0 ? 0 : Math.round((finished / total) * PERCENT_MAX),
+  };
+}
+
 export function getJobFinishedAt(job: IgScrapeJob): string | null {
   const finished = job.scrapes
     .map((scrape) => scrape.finished_at)

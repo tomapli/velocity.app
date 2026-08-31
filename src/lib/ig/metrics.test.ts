@@ -2,11 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import type { IgPost } from "@/lib/ig/queries";
 import {
-  filterIgPostsByMediaType,
   getIgPostSortOptions,
   getIgPostMetrics,
   postsToCsv,
-  sortIgPosts,
 } from "@/lib/ig/metrics";
 
 function post(overrides: Partial<IgPost> = {}): IgPost {
@@ -38,6 +36,14 @@ function post(overrides: Partial<IgPost> = {}): IgPost {
     average_watch_time_ms: null,
     hold_rate: null,
     description: "A caption",
+    description_length: 9,
+    engagement_rate: 19,
+    weighted_engagement_rate: 39,
+    save_rate: 4,
+    share_rate: 3,
+    comment_rate: 2,
+    like_rate: 10,
+    follows_per_1k_views: null,
     created_at: "2026-08-20T11:00:00.000Z",
     ...overrides,
   };
@@ -95,30 +101,7 @@ describe("getIgPostMetrics", () => {
   });
 });
 
-describe("sortIgPosts and filterIgPostsByMediaType", () => {
-  it("sorts by weighted ER and keeps omitted values last", () => {
-    const low = post({ id: "a", view_count: 1000, save_count: 1, share_count: 0, comment_count: 0, like_count: 0 });
-    const high = post({ id: "b", view_count: 100, save_count: 10, share_count: 0, comment_count: 0, like_count: 0 });
-    const omitted = post({ id: "c", view_count: 0 });
-
-    expect(sortIgPosts([low, omitted, high], "weighted_er", "desc").map((row) => row.id)).toEqual([
-      "b",
-      "a",
-      "c",
-    ]);
-  });
-
-  it("sorts by follows per thousand views", () => {
-    const lower = post({ id: "a", follows_count: 10, view_count: 2_000 });
-    const higher = post({ id: "b", follows_count: 10, view_count: 500 });
-
-    expect(
-      sortIgPosts([lower, higher], "follows_per_1k_views", "desc").map(
-        (row) => row.id,
-      ),
-    ).toEqual(["b", "a"]);
-  });
-
+describe("getIgPostSortOptions", () => {
   it("omits Meta-only sort choices for public data", () => {
     const publicKeys = getIgPostSortOptions("public").map((option) => option.key);
 
@@ -129,20 +112,6 @@ describe("sortIgPosts and filterIgPostsByMediaType", () => {
     expect(publicKeys).not.toContain("average_watch_time_ms");
     expect(publicKeys).not.toContain("hold_rate");
     expect(publicKeys).toContain("like_rate");
-  });
-
-  it("filters to selected media types", () => {
-    const posts = [
-      post({ id: "a", media_type: "short" }),
-      post({ id: "b", media_type: "static" }),
-      post({ id: "c", media_type: "carousel" }),
-    ];
-
-    expect(filterIgPostsByMediaType(posts, ["static", "carousel"]).map((row) => row.id)).toEqual([
-      "b",
-      "c",
-    ]);
-    expect(filterIgPostsByMediaType(posts, []).map((row) => row.id)).toEqual(["a", "b", "c"]);
   });
 });
 

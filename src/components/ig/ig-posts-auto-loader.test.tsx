@@ -72,7 +72,7 @@ describe("IgPostsAutoLoader", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Load 25 older posts" }));
+    await user.click(screen.getByRole("button", { name: "Load 25 more posts" }));
 
     expect(onLoadMore).toHaveBeenCalledOnce();
   });

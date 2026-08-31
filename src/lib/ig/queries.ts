@@ -5,6 +5,7 @@ import {
   IG_POSTS_EXPORT_PAGE_SIZE,
   IG_POSTS_PAGE_SIZE,
 } from "@/lib/ig/constants";
+import type { IgMediaType, IgPostSortKey } from "@/lib/ig/metrics";
 import { deduplicateIgPostsByShortcode } from "@/lib/ig/post-identity";
 import type { Database } from "@/lib/supabase/database.types";
 import { throwQueryError } from "@/lib/supabase/throw-query-error";
@@ -46,6 +47,50 @@ export interface IgPostsPage {
   nextOffset: number;
 }
 
+export type IgPostSortDirection = "asc" | "desc";
+
+/** Sort and filter parameters applied in the database, not on loaded rows. */
+export interface IgPostsListQuery {
+  sortKey?: IgPostSortKey;
+  sortDirection?: IgPostSortDirection;
+  mediaTypes?: readonly IgMediaType[];
+}
+
+export interface IgPostsPageOptions extends IgPostsListQuery {
+  offset?: number;
+  pageSize?: number;
+}
+
+export const IG_POSTS_DEFAULT_SORT_KEY: IgPostSortKey = "uploaded_at";
+export const IG_POSTS_DEFAULT_SORT_DIRECTION: IgPostSortDirection = "desc";
+
+/**
+ * Maps each sort key to the `ig_posts` column PostgREST orders by. Derived
+ * metrics are stored generated columns (see `db/schema/ig-posts.ts`).
+ */
+const IG_POST_SORT_COLUMNS: Record<IgPostSortKey, string> = {
+  uploaded_at: "uploaded_at",
+  video_length_secs: "video_length_secs",
+  view_count: "view_count",
+  like_count: "like_count",
+  comment_count: "comment_count",
+  save_count: "save_count",
+  share_count: "share_count",
+  follows_count: "follows_count",
+  follows_per_1k_views: "follows_per_1k_views",
+  reach_count: "reach_count",
+  hook_rate: "hook_rate",
+  average_watch_time_ms: "average_watch_time_ms",
+  hold_rate: "hold_rate",
+  description_length: "description_length",
+  er: "engagement_rate",
+  weighted_er: "weighted_engagement_rate",
+  save_rate: "save_rate",
+  share_rate: "share_rate",
+  comment_rate: "comment_rate",
+  like_rate: "like_rate",
+};
+
 const IG_POST_LIST_COLUMNS = `
   id,
   ig_profile_id,
@@ -76,23 +121,29 @@ export interface ScheduleIgScrapeParams {
   sinceWhen?: string | null;
 }
 
+/** Every workspace profile, scrape (group), and request (scheduled scrape). */
+export interface IgScrapeSnapshot {
+  groups: Group[];
+  scrapes: ScheduledScrape[];
+  profiles: IgProfile[];
+}
+
 /**
- * Loads group rows for scrape history with their profiles and scheduled runs.
+ * Loads the raw rows behind the home profile list and the scrapes manager so
+ * clients can keep them in sync through realtime broadcasts.
  */
-export async function listIgScrapeJobs(
+export async function loadIgScrapeSnapshot(
   supabase: SupabaseClient<Database>,
-): Promise<IgScrapeJob[]> {
+): Promise<IgScrapeSnapshot> {
   const [
     { data: groups, error: groupsError },
     { data: scrapes, error: scrapesError },
     { data: profiles, error: profilesError },
   ] = await Promise.all([
-      supabase.from("groups").select("*").order("created_at", { ascending: false }),
-      supabase
-        .from("scheduled_scrapes")
-        .select("*"),
-      supabase.from("ig_profiles").select("*"),
-    ]);
+    supabase.from("groups").select("*").order("created_at", { ascending: false }),
+    supabase.from("scheduled_scrapes").select("*"),
+    supabase.from("ig_profiles").select("*"),
+  ]);
 
   if (groupsError) {
     return throwQueryError(groupsError);
@@ -104,10 +155,25 @@ export async function listIgScrapeJobs(
     return throwQueryError(profilesError);
   }
 
+  return {
+    groups: groups ?? [],
+    scrapes: scrapes ?? [],
+    profiles: profiles ?? [],
+  };
+}
+
+/**
+ * Loads group rows for scrape history with their profiles and scheduled runs.
+ */
+export async function listIgScrapeJobs(
+  supabase: SupabaseClient<Database>,
+): Promise<IgScrapeJob[]> {
+  const snapshot = await loadIgScrapeSnapshot(supabase);
+
   return buildIgScrapeJobs(
-    groups ?? [],
-    scrapes ?? [],
-    new Map((profiles ?? []).map((profile) => [profile.id, profile])),
+    snapshot.groups,
+    snapshot.scrapes,
+    new Map(snapshot.profiles.map((profile) => [profile.id, profile])),
   );
 }
 
@@ -174,18 +240,41 @@ export async function getLatestIgScrapeJobForUsername(
   )[0] ?? null;
 }
 
-/** Loads one lightweight page of profile posts, newest upload first. */
+/**
+ * Loads one lightweight page of profile posts, sorted and filtered in the
+ * database so every page reflects the whole profile, not just loaded rows.
+ * Omitted metric values always sort last; ties fall back to newest upload.
+ */
 export async function listIgPostsPageForProfile(
   supabase: SupabaseClient<Database>,
   profileId: string,
-  offset = 0,
-  pageSize = IG_POSTS_PAGE_SIZE,
+  {
+    offset = 0,
+    pageSize = IG_POSTS_PAGE_SIZE,
+    sortKey = IG_POSTS_DEFAULT_SORT_KEY,
+    sortDirection = IG_POSTS_DEFAULT_SORT_DIRECTION,
+    mediaTypes = [],
+  }: IgPostsPageOptions = {},
 ): Promise<IgPostsPage> {
-  const { data, error } = await supabase
+  const sortColumn = IG_POST_SORT_COLUMNS[sortKey];
+  let query = supabase
     .from("ig_posts")
     .select(IG_POST_LIST_COLUMNS)
-    .eq("ig_profile_id", profileId)
-    .order("uploaded_at", { ascending: false })
+    .eq("ig_profile_id", profileId);
+
+  if (mediaTypes.length > 0) {
+    query = query.in("media_type", [...mediaTypes]);
+  }
+
+  query = query.order(sortColumn, {
+    ascending: sortDirection === "asc",
+    nullsFirst: false,
+  });
+  if (sortColumn !== IG_POST_SORT_COLUMNS.uploaded_at) {
+    query = query.order("uploaded_at", { ascending: false, nullsFirst: false });
+  }
+
+  const { data, error } = await query
     .order("id", { ascending: false })
     .range(offset, offset + pageSize);
 
@@ -209,18 +298,18 @@ export async function listIgPostsPageForProfile(
 export async function listIgPostsForProfile(
   supabase: SupabaseClient<Database>,
   profileId: string,
+  listQuery: IgPostsListQuery = {},
 ): Promise<IgPostListItem[]> {
   const posts: IgPostListItem[] = [];
   let offset = 0;
   let hasMore = true;
 
   while (hasMore) {
-    const page = await listIgPostsPageForProfile(
-      supabase,
-      profileId,
+    const page = await listIgPostsPageForProfile(supabase, profileId, {
+      ...listQuery,
       offset,
-      IG_POSTS_EXPORT_PAGE_SIZE,
-    );
+      pageSize: IG_POSTS_EXPORT_PAGE_SIZE,
+    });
     posts.push(...page.posts);
     offset = page.nextOffset;
     hasMore = page.hasMore;

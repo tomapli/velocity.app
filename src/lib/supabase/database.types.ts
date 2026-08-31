@@ -144,91 +144,115 @@ export type Database = {
           average_watch_time_ms: number | null
           carousel_image_urls: string[] | null
           comment_count: number | null
+          comment_rate: number | null
           created_at: string
           description: string | null
+          description_length: number | null
           details_scrape_id: string | null
+          engagement_rate: number | null
           first_frame_url: string | null
           follower_non_follower_ratio: number | null
           follower_view_count: number | null
           follows_count: number | null
+          follows_per_1k_views: number | null
           hold_rate: number | null
           hook_rate: number | null
           id: string
           ig_profile_id: string
           like_count: number | null
+          like_rate: number | null
           media_type: Database["public"]["Enums"]["ig_post_media_type"] | null
           meta_media_id: string | null
           non_follower_view_count: number | null
           post_url: string
           reach_count: number | null
           save_count: number | null
+          save_rate: number | null
           share_count: number | null
+          share_rate: number | null
           source_scrape_id: string
           thumbnail_url: string | null
           uploaded_at: string | null
           video_embed_url: string | null
           video_length_secs: number | null
           view_count: number | null
+          weighted_engagement_rate: number | null
         }
         Insert: {
           average_watch_time_ms?: number | null
           carousel_image_urls?: string[] | null
           comment_count?: number | null
+          comment_rate?: number | null
           created_at?: string
           description?: string | null
+          description_length?: number | null
           details_scrape_id?: string | null
+          engagement_rate?: number | null
           first_frame_url?: string | null
           follower_non_follower_ratio?: number | null
           follower_view_count?: number | null
           follows_count?: number | null
+          follows_per_1k_views?: number | null
           hold_rate?: number | null
           hook_rate?: number | null
           id?: string
           ig_profile_id: string
           like_count?: number | null
+          like_rate?: number | null
           media_type?: Database["public"]["Enums"]["ig_post_media_type"] | null
           meta_media_id?: string | null
           non_follower_view_count?: number | null
           post_url: string
           reach_count?: number | null
           save_count?: number | null
+          save_rate?: number | null
           share_count?: number | null
+          share_rate?: number | null
           source_scrape_id: string
           thumbnail_url?: string | null
           uploaded_at?: string | null
           video_embed_url?: string | null
           video_length_secs?: number | null
           view_count?: number | null
+          weighted_engagement_rate?: number | null
         }
         Update: {
           average_watch_time_ms?: number | null
           carousel_image_urls?: string[] | null
           comment_count?: number | null
+          comment_rate?: number | null
           created_at?: string
           description?: string | null
+          description_length?: number | null
           details_scrape_id?: string | null
+          engagement_rate?: number | null
           first_frame_url?: string | null
           follower_non_follower_ratio?: number | null
           follower_view_count?: number | null
           follows_count?: number | null
+          follows_per_1k_views?: number | null
           hold_rate?: number | null
           hook_rate?: number | null
           id?: string
           ig_profile_id?: string
           like_count?: number | null
+          like_rate?: number | null
           media_type?: Database["public"]["Enums"]["ig_post_media_type"] | null
           meta_media_id?: string | null
           non_follower_view_count?: number | null
           post_url?: string
           reach_count?: number | null
           save_count?: number | null
+          save_rate?: number | null
           share_count?: number | null
+          share_rate?: number | null
           source_scrape_id?: string
           thumbnail_url?: string | null
           uploaded_at?: string | null
           video_embed_url?: string | null
           video_length_secs?: number | null
           view_count?: number | null
+          weighted_engagement_rate?: number | null
         }
         Relationships: [
           {

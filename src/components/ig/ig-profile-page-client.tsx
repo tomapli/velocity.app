@@ -8,8 +8,8 @@ import { Instagram, LoaderCircle } from "lucide-react";
 import { IgPostsTable } from "@/components/ig/ig-posts-table";
 import { IgPostsAutoLoader } from "@/components/ig/ig-posts-auto-loader";
 import { IgPostsToolbar } from "@/components/ig/ig-posts-toolbar";
+import { DataSourceBadge, ScrapeStatusBadge } from "@/components/ig/scrape-badges";
 import { ScrapeParamsDialog } from "@/components/ig/scrape-params-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,10 +29,8 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  filterIgPostsByMediaType,
   isIgPostSortKeyAvailable,
   postsToCsv,
-  sortIgPosts,
   type IgMediaType,
   type IgPostSortKey,
 } from "@/lib/ig/metrics";
@@ -44,17 +42,20 @@ import {
   upsertGroup,
   upsertScheduledScrape,
   type IgScrapeJob,
-  type IgScrapeStatus,
 } from "@/lib/ig/groups";
 import type {
   Group,
   IgAccountInsights,
+  IgPostsListQuery,
   IgPostsPage,
+  IgPostSortDirection,
   IgProfile,
   ScheduledScrape,
 } from "@/lib/ig/queries";
 import {
   getIgAccountInsightsForGroupPeriod,
+  IG_POSTS_DEFAULT_SORT_DIRECTION,
+  IG_POSTS_DEFAULT_SORT_KEY,
   listIgPostsForProfile,
   listIgPostsPageForProfile,
 } from "@/lib/ig/queries";
@@ -72,13 +73,6 @@ interface IgProfilePageClientProps {
 }
 
 type PromptMode = "generate" | "regenerate" | null;
-
-const STATUS_LABELS: Record<IgScrapeStatus, string> = {
-  waiting: "Waiting",
-  scraping: "Scraping",
-  ready: "Ready",
-  error: "Error",
-};
 
 const IgAccountInsightsPanel = dynamic(() =>
   import("@/components/ig/ig-account-insights").then(
@@ -108,6 +102,7 @@ export function IgProfilePageClient({
   const [paramsDialogOpen, setParamsDialogOpen] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isReloadingPosts, setIsReloadingPosts] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [loadingInsightsRange, setLoadingInsightsRange] = useState<number | null>(
     initialJob?.group.data_source === "meta_hybrid"
@@ -115,8 +110,10 @@ export function IgProfilePageClient({
       : null,
   );
   const [mediaTypes, setMediaTypes] = useState<IgMediaType[]>([]);
-  const [sortKey, setSortKey] = useState<IgPostSortKey>("uploaded_at");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [sortKey, setSortKey] = useState<IgPostSortKey>(IG_POSTS_DEFAULT_SORT_KEY);
+  const [sortDirection, setSortDirection] = useState<IgPostSortDirection>(
+    IG_POSTS_DEFAULT_SORT_DIRECTION,
+  );
   const supabase = useMemo(() => createClient(), []);
 
   const job = useMemo(() => {
@@ -130,18 +127,34 @@ export function IgProfilePageClient({
   }, [groups, profile, scrapes]);
   const dataSource = job?.group.data_source;
 
-  useEffect(() => {
-    if (!isIgPostSortKeyAvailable(sortKey, dataSource)) {
-      setSortKey("uploaded_at");
-    }
-  }, [dataSource, sortKey]);
+  // Meta-only sort keys fall back to the default until the state effect
+  // below syncs the dropdown, so the query never asks for an unavailable key.
+  const activeSortKey = isIgPostSortKeyAvailable(sortKey, dataSource)
+    ? sortKey
+    : IG_POSTS_DEFAULT_SORT_KEY;
 
+  useEffect(() => {
+    if (sortKey !== activeSortKey) {
+      setSortKey(activeSortKey);
+    }
+  }, [activeSortKey, sortKey]);
+
+  // Sorting and media filters run in the database so every page reflects the
+  // whole profile; changing them reloads from the first page.
+  const postsListQuery = useMemo<IgPostsListQuery>(
+    () => ({ sortKey: activeSortKey, sortDirection, mediaTypes }),
+    [activeSortKey, mediaTypes, sortDirection],
+  );
   const postsDataVersion = getPostsDataVersion(profile?.id ?? null, job);
+  const postsQueryVersion = getPostsQueryVersion(postsDataVersion, postsListQuery);
   const insightsDataVersion = getInsightsDataVersion(job);
   const insightsGroupId =
     job?.group.data_source === "meta_hybrid" ? job.group.id : null;
-  const loadedPostsDataVersion = useRef(
-    getPostsDataVersion(initialJob?.profile.id ?? null, initialJob),
+  const loadedPostsQueryVersion = useRef(
+    getPostsQueryVersion(
+      getPostsDataVersion(initialJob?.profile.id ?? null, initialJob),
+      {},
+    ),
   );
   const loadedInsightsDataVersion = useRef("unloaded");
   const loadMoreRequestPending = useRef(false);
@@ -200,17 +213,22 @@ export function IgProfilePageClient({
       setNextPostsOffset(0);
       return;
     }
-    if (loadedPostsDataVersion.current === postsDataVersion) {
+    if (loadedPostsQueryVersion.current === postsQueryVersion) {
       return;
     }
 
-    loadedPostsDataVersion.current = postsDataVersion;
+    loadedPostsQueryVersion.current = postsQueryVersion;
 
     let cancelled = false;
+    setIsReloadingPosts(true);
 
     const load = async () => {
       try {
-        const page = await listIgPostsPageForProfile(supabase, profileId);
+        const page = await listIgPostsPageForProfile(
+          supabase,
+          profileId,
+          postsListQuery,
+        );
         if (!cancelled) {
           setPosts(page.posts);
           setHasMorePosts(page.hasMore);
@@ -220,6 +238,10 @@ export function IgProfilePageClient({
         if (!cancelled) {
           toast.error(error instanceof Error ? error.message : "Could not load posts");
         }
+      } finally {
+        if (!cancelled) {
+          setIsReloadingPosts(false);
+        }
       }
     };
 
@@ -228,7 +250,7 @@ export function IgProfilePageClient({
     return () => {
       cancelled = true;
     };
-  }, [postsDataVersion, profile?.id, supabase]);
+  }, [postsListQuery, postsQueryVersion, profile?.id, supabase]);
 
   useEffect(() => {
     if (!insightsGroupId) {
@@ -304,10 +326,6 @@ export function IgProfilePageClient({
   };
 
   const status = job ? getIgScrapeJobStatus(job) : "waiting";
-  const visiblePosts = useMemo(
-    () => sortIgPosts(filterIgPostsByMediaType(posts, mediaTypes), sortKey, sortDirection),
-    [mediaTypes, posts, sortDirection, sortKey],
-  );
 
   const handlePromptConfirm = () => {
     setPromptMode(null);
@@ -355,6 +373,7 @@ export function IgProfilePageClient({
     if (
       !profile ||
       !hasMorePosts ||
+      isReloadingPosts ||
       loadMoreRequestPending.current
     ) {
       return;
@@ -363,11 +382,14 @@ export function IgProfilePageClient({
     loadMoreRequestPending.current = true;
     setIsLoadingMore(true);
     try {
-      const page = await listIgPostsPageForProfile(
-        supabase,
-        profile.id,
-        nextPostsOffset,
-      );
+      const page = await listIgPostsPageForProfile(supabase, profile.id, {
+        ...postsListQuery,
+        offset: nextPostsOffset,
+      });
+      // The sort or filter changed mid-flight; the reload effect owns the list now.
+      if (loadedPostsQueryVersion.current !== postsQueryVersion) {
+        return;
+      }
       setPosts((current) => mergePosts(current, page.posts));
       setHasMorePosts(page.hasMore);
       setNextPostsOffset(page.nextOffset);
@@ -377,7 +399,15 @@ export function IgProfilePageClient({
       loadMoreRequestPending.current = false;
       setIsLoadingMore(false);
     }
-  }, [hasMorePosts, nextPostsOffset, profile, supabase]);
+  }, [
+    hasMorePosts,
+    isReloadingPosts,
+    nextPostsOffset,
+    postsListQuery,
+    postsQueryVersion,
+    profile,
+    supabase,
+  ]);
 
   const handleExport = async () => {
     if (!profile || isExporting) {
@@ -386,15 +416,11 @@ export function IgProfilePageClient({
 
     setIsExporting(true);
     try {
+      // Rows already arrive sorted and filtered by the database.
       const exportPosts = hasMorePosts
-        ? await listIgPostsForProfile(supabase, profile.id)
+        ? await listIgPostsForProfile(supabase, profile.id, postsListQuery)
         : posts;
-      const visibleExportPosts = sortIgPosts(
-        filterIgPostsByMediaType(exportPosts, mediaTypes),
-        sortKey,
-        sortDirection,
-      );
-      const csv = postsToCsv(visibleExportPosts, {
+      const csv = postsToCsv(exportPosts, {
         dataSource: job?.group.data_source,
         accountInsights:
           accountInsights.find(
@@ -425,28 +451,19 @@ export function IgProfilePageClient({
         title={`@${username}`}
         description={profile?.ig_name ?? profile?.description ?? "Instagram profile results"}
         count={{
-          value: visiblePosts.length,
+          value: posts.length,
           label: hasMorePosts
-            ? visiblePosts.length === 1
+            ? posts.length === 1
               ? "loaded post"
               : "loaded posts"
-            : visiblePosts.length === 1
+            : posts.length === 1
               ? "post"
               : "posts",
         }}
         action={
           <div className="flex items-center gap-2">
-            {job ? (
-              <Badge variant="outline">
-                {job.group.data_source === "meta_hybrid"
-                  ? "Meta + public data"
-                  : "Public data"}
-              </Badge>
-            ) : null}
-            <Badge variant="outline" className={cn(STATUS_BADGE_CLASSES[status])}>
-              {isBusy ? <LoaderCircle className="size-3 animate-spin" /> : null}
-              {STATUS_LABELS[status]}
-            </Badge>
+            {job ? <DataSourceBadge dataSource={job.group.data_source} /> : null}
+            <ScrapeStatusBadge status={status} />
           </div>
         }
       />
@@ -455,7 +472,7 @@ export function IgProfilePageClient({
         mediaTypes={mediaTypes}
         dataSource={dataSource}
         onMediaTypesChange={setMediaTypes}
-        sortKey={sortKey}
+        sortKey={activeSortKey}
         sortDirection={sortDirection}
         onSortKeyChange={setSortKey}
         onSortDirectionChange={setSortDirection}
@@ -503,6 +520,27 @@ export function IgProfilePageClient({
             <EmptyDescription>{getJobErrorMessage(job!) ?? "Try a rescan."}</EmptyDescription>
           </EmptyHeader>
         </Empty>
+      ) : posts.length === 0 && isReloadingPosts ? (
+        <Empty className="border" aria-busy>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <LoaderCircle className="animate-spin" />
+            </EmptyMedia>
+            <EmptyTitle>Loading posts</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
+      ) : posts.length === 0 && mediaTypes.length > 0 ? (
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Instagram />
+            </EmptyMedia>
+            <EmptyTitle>No posts match this filter</EmptyTitle>
+            <EmptyDescription>
+              Pick a different media type or clear the filter to see every post.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : posts.length === 0 ? (
         <Empty className="border">
           <EmptyHeader>
@@ -516,18 +554,26 @@ export function IgProfilePageClient({
           </EmptyHeader>
         </Empty>
       ) : (
-        <IgPostsTable
-          username={username}
-          posts={visiblePosts}
-          dataSource={dataSource}
-          sortKey={sortKey}
-          sortDirection={sortDirection}
-          onSortKeyChange={setSortKey}
-          onSortDirectionChange={setSortDirection}
-        />
+        <div
+          aria-busy={isReloadingPosts}
+          className={cn(
+            "transition-opacity",
+            isReloadingPosts && "pointer-events-none opacity-60",
+          )}
+        >
+          <IgPostsTable
+            username={username}
+            posts={posts}
+            dataSource={dataSource}
+            sortKey={activeSortKey}
+            sortDirection={sortDirection}
+            onSortKeyChange={setSortKey}
+            onSortDirectionChange={setSortDirection}
+          />
+        </div>
       )}
 
-      {hasMorePosts && posts.length > 0 ? (
+      {hasMorePosts && posts.length > 0 && !isReloadingPosts ? (
         <IgPostsAutoLoader
           hasMore={hasMorePosts}
           isLoading={isLoadingMore}
@@ -581,6 +627,17 @@ function getPostsDataVersion(
     .join(",") ?? "";
 
   return `${profileId ?? "none"}:${job?.group.id ?? "none"}:${finishedRuns}`;
+}
+
+function getPostsQueryVersion(
+  postsDataVersion: string,
+  { sortKey, sortDirection, mediaTypes }: IgPostsListQuery,
+): string {
+  const mediaTypesVersion = [...(mediaTypes ?? [])].sort().join("|");
+
+  return `${postsDataVersion}:${sortKey ?? IG_POSTS_DEFAULT_SORT_KEY}:${
+    sortDirection ?? IG_POSTS_DEFAULT_SORT_DIRECTION
+  }:${mediaTypesVersion}`;
 }
 
 function getInsightsDataVersion(job: IgScrapeJob | null): string {
@@ -638,10 +695,3 @@ function resolveInitialPrompt(job: IgScrapeJob | null): PromptMode {
 
   return null;
 }
-
-const STATUS_BADGE_CLASSES: Record<IgScrapeStatus, string> = {
-  waiting: "border-muted-foreground/30 text-muted-foreground",
-  scraping: "border-info/40 bg-info/10 text-info-foreground",
-  ready: "border-success/40 bg-success/10 text-success-strong",
-  error: "border-destructive/40 bg-destructive/10 text-destructive",
-};

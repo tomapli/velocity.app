@@ -9,6 +9,7 @@ import {
   timestamp,
   integer,
   numeric,
+  doublePrecision,
   index,
   unique,
   check,
@@ -61,6 +62,44 @@ export const igPosts = pgTable(
     averageWatchTimeMs: integer("average_watch_time_ms"),
     holdRate: numeric("hold_rate", { precision: 7, scale: 3, mode: "number" }),
     description: text("description"),
+    // Derived metrics stored as generated columns so PostgREST can sort and
+    // page over them. Formulas mirror `src/lib/ig/metrics.ts` (getIgPostMetrics):
+    // a metric is NULL whenever the JS helper returns null, and rate weights
+    // match IG_SAVE_WEIGHT / IG_SHARE_WEIGHT / IG_COMMENT_WEIGHT / IG_LIKE_WEIGHT.
+    descriptionLength: integer("description_length").generatedAlwaysAs(
+      sql`char_length(description)`,
+    ),
+    engagementRate: doublePrecision("engagement_rate").generatedAlwaysAs(
+      sql`CASE
+        WHEN view_count > 0
+          AND (like_count IS NOT NULL OR comment_count IS NOT NULL OR save_count IS NOT NULL OR share_count IS NOT NULL)
+        THEN (COALESCE(like_count, 0) + COALESCE(comment_count, 0) + COALESCE(save_count, 0) + COALESCE(share_count, 0))::double precision * 100 / view_count
+      END`,
+    ),
+    weightedEngagementRate: doublePrecision(
+      "weighted_engagement_rate",
+    ).generatedAlwaysAs(
+      sql`CASE
+        WHEN view_count > 0
+          AND (like_count IS NOT NULL OR comment_count IS NOT NULL OR save_count IS NOT NULL OR share_count IS NOT NULL)
+        THEN (COALESCE(save_count, 0) * 4 + COALESCE(share_count, 0) * 3 + COALESCE(comment_count, 0) * 2 + COALESCE(like_count, 0))::double precision * 100 / view_count
+      END`,
+    ),
+    saveRate: doublePrecision("save_rate").generatedAlwaysAs(
+      sql`CASE WHEN view_count > 0 AND save_count IS NOT NULL THEN save_count::double precision * 100 / view_count END`,
+    ),
+    shareRate: doublePrecision("share_rate").generatedAlwaysAs(
+      sql`CASE WHEN view_count > 0 AND share_count IS NOT NULL THEN share_count::double precision * 100 / view_count END`,
+    ),
+    commentRate: doublePrecision("comment_rate").generatedAlwaysAs(
+      sql`CASE WHEN view_count > 0 AND comment_count IS NOT NULL THEN comment_count::double precision * 100 / view_count END`,
+    ),
+    likeRate: doublePrecision("like_rate").generatedAlwaysAs(
+      sql`CASE WHEN view_count > 0 AND like_count IS NOT NULL THEN like_count::double precision * 100 / view_count END`,
+    ),
+    followsPer1kViews: doublePrecision("follows_per_1k_views").generatedAlwaysAs(
+      sql`CASE WHEN view_count > 0 AND follows_count IS NOT NULL THEN follows_count::double precision * 1000 / view_count END`,
+    ),
     createdAt: timestamp("created_at", {
       withTimezone: true,
       mode: "string",
