@@ -62,13 +62,17 @@ import type {
 } from "@/lib/ig/queries";
 import {
   getIgAccountInsightsForGroupPeriod,
+  getUploadedSinceIso,
   IG_POSTS_DEFAULT_SORT_DIRECTION,
   IG_POSTS_DEFAULT_SORT_KEY,
   listIgPostsForProfile,
   listIgPostsPageForProfile,
 } from "@/lib/ig/queries";
 import { deduplicateIgPostsByShortcode } from "@/lib/ig/post-identity";
-import { META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS } from "@/lib/meta/constants";
+import {
+  META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
+  type MetaAccountInsightRangeDays,
+} from "@/lib/meta/constants";
 import { scheduleIgScrape } from "@/lib/ig/schedule-scrape";
 import { useIgScrapesRealtime } from "@/lib/ig/use-ig-scrapes-realtime";
 import { createClient } from "@/lib/supabase/client";
@@ -117,6 +121,8 @@ export function IgProfilePageClient({
       ? META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS
       : null,
   );
+  const [insightsRangeDays, setInsightsRangeDays] =
+    useState<MetaAccountInsightRangeDays>(META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS);
   const [mediaTypes, setMediaTypes] = useState<IgMediaType[]>([]);
   const [sortKey, setSortKey] = useState<IgPostSortKey>(IG_POSTS_DEFAULT_SORT_KEY);
   const [sortDirection, setSortDirection] = useState<IgPostSortDirection>(
@@ -147,11 +153,19 @@ export function IgProfilePageClient({
     }
   }, [activeSortKey, sortKey]);
 
+  // The account-insights time range narrows the posts list too, so the table
+  // and the insights describe the same window; only hybrid scrapes have it.
+  const uploadedSince = useMemo(
+    () =>
+      dataSource === "meta_hybrid" ? getUploadedSinceIso(insightsRangeDays) : null,
+    [dataSource, insightsRangeDays],
+  );
+
   // Sorting and media filters run in the database so every page reflects the
   // whole profile; changing them reloads from the first page.
   const postsListQuery = useMemo<IgPostsListQuery>(
-    () => ({ sortKey: activeSortKey, sortDirection, mediaTypes }),
-    [activeSortKey, mediaTypes, sortDirection],
+    () => ({ sortKey: activeSortKey, sortDirection, mediaTypes, uploadedSince }),
+    [activeSortKey, mediaTypes, sortDirection, uploadedSince],
   );
   const postsDataVersion = getPostsDataVersion(profile?.id ?? null, job);
   const postsQueryVersion = getPostsQueryVersion(postsDataVersion, postsListQuery);
@@ -161,7 +175,11 @@ export function IgProfilePageClient({
   const loadedPostsQueryVersion = useRef(
     getPostsQueryVersion(
       getPostsDataVersion(initialJob?.profile.id ?? null, initialJob),
-      {},
+      // Mirrors the server-side initial page fetch so hybrid profiles do not
+      // refetch an identical first page on mount.
+      initialJob?.group.data_source === "meta_hybrid"
+        ? { uploadedSince: getUploadedSinceIso(META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS) }
+        : {},
     ),
   );
   const loadedInsightsDataVersion = useRef("unloaded");
@@ -359,6 +377,7 @@ export function IgProfilePageClient({
       setHasMorePosts(false);
       setNextPostsOffset(0);
       setAccountInsights([]);
+      setInsightsRangeDays(META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS);
       setLoadingInsightsRange(
         created.group.data_source === "meta_hybrid"
           ? META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS
@@ -497,6 +516,8 @@ export function IgProfilePageClient({
       ) : accountInsights.length > 0 ? (
         <IgAccountInsightsPanel
           insights={accountInsights}
+          rangeDays={insightsRangeDays}
+          onRangeDaysChange={setInsightsRangeDays}
           loadingRangeDays={loadingInsightsRange}
           onRangeRequest={(periodDays) => void handleInsightsRangeRequest(periodDays)}
           isRefreshing={job?.scrapes.some(
@@ -538,7 +559,7 @@ export function IgProfilePageClient({
             <EmptyTitle>Loading posts</EmptyTitle>
           </EmptyHeader>
         </Empty>
-      ) : posts.length === 0 && mediaTypes.length > 0 ? (
+      ) : posts.length === 0 && (mediaTypes.length > 0 || uploadedSince != null) ? (
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -546,7 +567,9 @@ export function IgProfilePageClient({
             </EmptyMedia>
             <EmptyTitle>No posts match this filter</EmptyTitle>
             <EmptyDescription>
-              Pick a different media type or clear the filter to see every post.
+              {mediaTypes.length > 0
+                ? "Pick a different media type or clear the filter to see every post."
+                : "No posts were uploaded in the selected insights range. Pick a longer range to see older posts."}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -640,13 +663,13 @@ function getPostsDataVersion(
 
 function getPostsQueryVersion(
   postsDataVersion: string,
-  { sortKey, sortDirection, mediaTypes }: IgPostsListQuery,
+  { sortKey, sortDirection, mediaTypes, uploadedSince }: IgPostsListQuery,
 ): string {
   const mediaTypesVersion = [...(mediaTypes ?? [])].sort().join("|");
 
   return `${postsDataVersion}:${sortKey ?? IG_POSTS_DEFAULT_SORT_KEY}:${
     sortDirection ?? IG_POSTS_DEFAULT_SORT_DIRECTION
-  }:${mediaTypesVersion}`;
+  }:${mediaTypesVersion}:${uploadedSince ?? ""}`;
 }
 
 function getInsightsDataVersion(job: IgScrapeJob | null): string {

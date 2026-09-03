@@ -57,6 +57,9 @@ interface IgAccountInsightsPanelProps {
   isRefreshing?: boolean;
   loadingRangeDays?: MetaAccountInsightRangeDays | number | null;
   onRangeRequest?: (periodDays: MetaAccountInsightRangeDays) => void;
+  /** Controls the range externally so the page can filter other views by it. */
+  rangeDays?: MetaAccountInsightRangeDays;
+  onRangeDaysChange?: (periodDays: MetaAccountInsightRangeDays) => void;
 }
 
 /** Key metrics shown as always-visible cards with their value splits. */
@@ -131,10 +134,12 @@ export function IgAccountInsightsPanel({
   isRefreshing = false,
   loadingRangeDays = null,
   onRangeRequest,
+  rangeDays: controlledRangeDays,
+  onRangeDaysChange,
 }: IgAccountInsightsPanelProps) {
-  const [rangeDays, setRangeDays] = useState<MetaAccountInsightRangeDays>(
-    META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
-  );
+  const [internalRangeDays, setInternalRangeDays] =
+    useState<MetaAccountInsightRangeDays>(META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS);
+  const rangeDays = controlledRangeDays ?? internalRangeDays;
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const selected =
@@ -224,7 +229,8 @@ export function IgAccountInsightsPanel({
           onValueChange={(value) => {
             if (value) {
               const nextRange = Number(value) as MetaAccountInsightRangeDays;
-              setRangeDays(nextRange);
+              setInternalRangeDays(nextRange);
+              onRangeDaysChange?.(nextRange);
               if (!insights.some((row) => row.period_days === nextRange)) {
                 onRangeRequest?.(nextRange);
               }

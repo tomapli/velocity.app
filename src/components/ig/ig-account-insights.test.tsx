@@ -113,6 +113,25 @@ describe("IgAccountInsightsPanel", () => {
     expect(screen.getByText("No 30-day insights yet")).toBeInTheDocument();
   });
 
+  it("follows an externally controlled range and reports changes", async () => {
+    const user = userEvent.setup();
+    const onRangeDaysChange = vi.fn();
+    render(
+      <IgAccountInsightsPanel
+        insights={[makeRow(15, makeViewsMetrics(150)), makeRow(180, makeViewsMetrics(1_800))]}
+        rangeDays={15}
+        onRangeDaysChange={onRangeDaysChange}
+      />,
+    );
+
+    // The controlled value wins over the internal 180-day default.
+    expect(screen.getByText("150")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "180d" }));
+
+    expect(onRangeDaysChange).toHaveBeenCalledWith(180);
+  });
+
   it("requests an unloaded range only when it is selected", async () => {
     const user = userEvent.setup();
     const onRangeRequest = vi.fn();

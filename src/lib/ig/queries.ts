@@ -54,6 +54,8 @@ export interface IgPostsListQuery {
   sortKey?: IgPostSortKey;
   sortDirection?: IgPostSortDirection;
   mediaTypes?: readonly IgMediaType[];
+  /** Only posts uploaded at or after this ISO timestamp. */
+  uploadedSince?: string | null;
 }
 
 export interface IgPostsPageOptions extends IgPostsListQuery {
@@ -63,6 +65,19 @@ export interface IgPostsPageOptions extends IgPostsListQuery {
 
 export const IG_POSTS_DEFAULT_SORT_KEY: IgPostSortKey = "uploaded_at";
 export const IG_POSTS_DEFAULT_SORT_DIRECTION: IgPostSortDirection = "desc";
+
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000;
+
+/**
+ * Day-granular "last N days" cutoff for `uploadedSince`. Truncating to the
+ * UTC day keeps the value stable across renders, so the server-fetched first
+ * page and the client's query version agree instead of refetching on mount.
+ */
+export function getUploadedSinceIso(rangeDays: number): string {
+  const cutoff = new Date(Date.now() - rangeDays * MILLISECONDS_PER_DAY);
+  cutoff.setUTCHours(0, 0, 0, 0);
+  return cutoff.toISOString();
+}
 
 /**
  * Maps each sort key to the `ig_posts` column PostgREST orders by. Derived
@@ -297,6 +312,7 @@ export async function listIgPostsPageForProfile(
     sortKey = IG_POSTS_DEFAULT_SORT_KEY,
     sortDirection = IG_POSTS_DEFAULT_SORT_DIRECTION,
     mediaTypes = [],
+    uploadedSince = null,
   }: IgPostsPageOptions = {},
 ): Promise<IgPostsPage> {
   const sortColumn = IG_POST_SORT_COLUMNS[sortKey];
@@ -307,6 +323,9 @@ export async function listIgPostsPageForProfile(
 
   if (mediaTypes.length > 0) {
     query = query.in("media_type", [...mediaTypes]);
+  }
+  if (uploadedSince != null) {
+    query = query.gte("uploaded_at", uploadedSince);
   }
 
   query = query.order(sortColumn, {

@@ -7,8 +7,10 @@ import { IG_USERNAME_PATTERN } from "@/lib/ig/constants";
 import { syncUnsettledApifyRunsForGroup } from "@/lib/ig/process-apify-run";
 import {
   getLatestIgScrapeJobForUsername,
+  getUploadedSinceIso,
   listIgPostsPageForProfile,
 } from "@/lib/ig/queries";
+import { META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS } from "@/lib/meta/constants";
 import { maybeScheduleMetaInsightsRefresh } from "@/lib/meta/refresh-account-insights";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -60,8 +62,20 @@ export default async function IgProfilePage({ params }: IgProfilePageProps) {
     });
   }
 
+  // Hybrid profiles show account insights for a default range that also
+  // filters the posts list, so the first page is fetched with the same cutoff.
   const initialPostsPage = latestJob
-    ? await listIgPostsPageForProfile(supabase, latestJob.profile.id)
+    ? await listIgPostsPageForProfile(
+        supabase,
+        latestJob.profile.id,
+        latestJob.group.data_source === "meta_hybrid"
+          ? {
+              uploadedSince: getUploadedSinceIso(
+                META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
+              ),
+            }
+          : {},
+      )
     : { posts: [], hasMore: false, nextOffset: 0 };
 
   return (
