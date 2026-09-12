@@ -97,8 +97,7 @@ export function getIgScrapeJobStatus(job: IgScrapeJob): IgScrapeStatus {
 
   const listings = job.scrapes.filter((scrape) => isListingScrapeType(scrape.scrape_type));
   const details = job.scrapes.filter((scrape) => scrape.scrape_type === "post_details");
-  const meta = job.scrapes.filter((scrape) => scrape.scrape_type === "meta");
-  if (meta.some((scrape) => scrape.error_message)) {
+  if (job.scrapes.some((scrape) => (scrape.scrape_type === "meta" || scrape.scrape_type === "socialblade") && scrape.error_message)) {
     return "error";
   }
   if (details.some((scrape) => scrape.error_message)) {
@@ -139,7 +138,7 @@ export function getIgScrapeJobProgress(job: IgScrapeJob): IgScrapeJobProgress {
   const expectedTotal =
     Math.max(listings.length, getExpectedListingRequestCount(job.group.scrape_method)) +
     expectedDetails +
-    expectedMeta;
+    expectedMeta + job.scrapes.filter((scrape) => scrape.scrape_type === "socialblade").length;
 
   const finished = job.scrapes.filter((scrape) => scrape.finished_at).length;
   const completed = job.scrapes.reduce(

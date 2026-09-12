@@ -57,6 +57,7 @@ const FIRST_STAGE_ORDER: Record<ScheduledScrape["scrape_type"], number> = {
   profile_posts: 0,
   reels: 1,
   meta: 2,
+  socialblade: 2,
   post_details: 3,
 };
 
@@ -88,7 +89,7 @@ export function buildScrapeRequestGraph(
   }
 
   let previousStage = firstStage
-    .filter((scrape) => scrape.scrape_type !== "meta")
+    .filter((scrape) => scrape.scrape_type !== "meta" && scrape.scrape_type !== "socialblade")
     .map((scrape) => scrape.id);
   if (previousStage.length === 0) {
     previousStage = [SCRAPE_GRAPH_START_NODE_ID];

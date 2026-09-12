@@ -1,3 +1,4 @@
+import type { IgAccountSourceSelection } from "@/lib/ig/account-sources";
 import type { IgScrapeJob } from "@/lib/ig/groups";
 import {
   IG_DEFAULT_SCRAPE_METHOD,
@@ -7,6 +8,7 @@ import {
 const IG_SCRAPES_API_PATH = "/api/ig/scrapes";
 
 export interface ScheduleIgScrapeInput {
+  accountSource?: IgAccountSourceSelection["accountSource"];
   igUsername: string;
   requestedPostCount?: number | null;
   sinceWhen?: string | null;
@@ -31,6 +33,7 @@ export async function scheduleIgScrape(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       igUsername: input.igUsername,
+      accountSource: input.accountSource,
       requestedPostCount: input.requestedPostCount ?? null,
       sinceWhen: input.sinceWhen ?? null,
       dataSource: input.dataSource ?? "public",

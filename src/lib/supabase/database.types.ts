@@ -474,7 +474,9 @@ export type Database = {
     Enums: {
       ig_post_media_type: "carousel" | "short" | "static"
       ig_scrape_data_source: "public" | "meta_hybrid"
-      ig_scrape_method: "apify_instagram_scraper" | "data_slayer_instagram_posts"
+      ig_scrape_method:
+        | "apify_instagram_scraper"
+        | "data_slayer_instagram_posts"
       meta_oauth_provider: "facebook" | "instagram"
       scheduled_scrape_type:
         | "posts"
@@ -482,6 +484,7 @@ export type Database = {
         | "post_details"
         | "meta"
         | "profile_posts"
+        | "socialblade"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -611,7 +614,10 @@ export const Constants = {
     Enums: {
       ig_post_media_type: ["carousel", "short", "static"],
       ig_scrape_data_source: ["public", "meta_hybrid"],
-      ig_scrape_method: ["apify_instagram_scraper", "data_slayer_instagram_posts"],
+      ig_scrape_method: [
+        "apify_instagram_scraper",
+        "data_slayer_instagram_posts",
+      ],
       meta_oauth_provider: ["facebook", "instagram"],
       scheduled_scrape_type: [
         "posts",
@@ -619,6 +625,7 @@ export const Constants = {
         "post_details",
         "meta",
         "profile_posts",
+        "socialblade",
       ],
     },
   },

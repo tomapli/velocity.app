@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { startSocialbladeRun } from "@/lib/apify/socialblade";
+import { IG_ACCOUNT_SOURCES } from "@/lib/ig/account-sources";
 import { getErrorMessage } from "@/lib/errors";
 import { buildIgScrapeJobs } from "@/lib/ig/groups";
 import {
@@ -28,6 +30,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const CreateIgScrapeSchema = z.object({
+  accountSource: z.enum(IG_ACCOUNT_SOURCES).optional(),
   igUsername: z.string().trim().toLowerCase().regex(/^[a-z0-9._]{1,30}$/),
   requestedPostCount: z.number().int().min(1).max(500).nullable().optional(),
   sinceWhen: z.string().datetime({ offset: true }).nullable().optional(),
@@ -35,7 +38,11 @@ const CreateIgScrapeSchema = z.object({
   metaInstagramAccountId: z.string().uuid().nullable().optional(),
   scrapeMethod: z.enum(IG_SCRAPE_METHODS).default(IG_DEFAULT_SCRAPE_METHOD),
 }).superRefine((value, context) => {
-  if (value.dataSource === "meta_hybrid" && !value.metaInstagramAccountId) {
+  if (
+    (value.accountSource === "meta" ||
+      (value.accountSource === undefined && value.dataSource === "meta_hybrid")) &&
+    !value.metaInstagramAccountId
+  ) {
     context.addIssue({
       code: "custom",
       path: ["metaInstagramAccountId"],
@@ -50,6 +57,10 @@ export async function POST(request: Request) {
   if (!parsedBody.success) {
     return NextResponse.json({ error: "Invalid scrape request" }, { status: 400 });
   }
+
+  const accountSource = parsedBody.data.accountSource ??
+    (parsedBody.data.dataSource === "meta_hybrid" ? "meta" : "none");
+  const dataSource = accountSource === "meta" ? "meta_hybrid" : "public";
 
   const token = process.env.APIFY_API_TOKEN;
   if (!token) {
@@ -75,7 +86,7 @@ export async function POST(request: Request) {
   let metaAccess: ResolvedMetaAccountAccess | null = null;
 
   if (
-    parsedBody.data.dataSource === "meta_hybrid" &&
+    accountSource === "meta" &&
     parsedBody.data.metaInstagramAccountId
   ) {
     try {
@@ -99,10 +110,10 @@ export async function POST(request: Request) {
       created_by: user.id,
       requested_post_count: requestedPostCount,
       since_when: sinceWhen,
-      data_source: parsedBody.data.dataSource,
+      data_source: dataSource,
       scrape_method: parsedBody.data.scrapeMethod,
       meta_instagram_account_id:
-        parsedBody.data.dataSource === "meta_hybrid"
+        accountSource === "meta"
           ? parsedBody.data.metaInstagramAccountId
           : null,
       meta_connection_id: metaAccess?.connection.id ?? null,
@@ -124,6 +135,9 @@ export async function POST(request: Request) {
         ];
   const scrapeRows: Insertable<"scheduled_scrapes">[] = [
     ...listingRows,
+    ...(accountSource === "socialblade"
+      ? [{ group_id: group.id, scrape_type: "socialblade" as const, state: {} }]
+      : []),
     ...(initialMetaState
       ? [
           {
@@ -150,36 +164,38 @@ export async function POST(request: Request) {
   try {
     const started = await Promise.all(
       scrapes
-        .filter((scrape) => isListingScrapeType(scrape.scrape_type))
+        .filter((scrape) => isListingScrapeType(scrape.scrape_type) || scrape.scrape_type === "socialblade")
         .map(async (scrape) => {
-        const run =
-          scrape.scrape_type === "profile_posts"
-            ? await startProfilePostsRun(token, {
-                username: profile.ig_username,
-                requestedPostCount,
-                sinceWhen,
-              })
-            : await startListingRun(token, {
-                scrapeType: scrape.scrape_type === "reels" ? "reels" : "posts",
-                username: profile.ig_username,
-                requestedPostCount,
-                sinceWhen,
-              });
-        const { data: updated, error: updateError } = await supabase
-          .from("scheduled_scrapes")
-          .update({
-            apify_called_at: new Date().toISOString(),
-            apify_run_id: run.id,
-          })
-          .eq("id", scrape.id)
-          .select("*")
-          .single();
+          const run =
+            scrape.scrape_type === "socialblade"
+              ? await startSocialbladeRun(token, profile.ig_username)
+              : scrape.scrape_type === "profile_posts"
+              ? await startProfilePostsRun(token, {
+                  username: profile.ig_username,
+                  requestedPostCount,
+                  sinceWhen,
+                })
+              : await startListingRun(token, {
+                  scrapeType: scrape.scrape_type === "reels" ? "reels" : "posts",
+                  username: profile.ig_username,
+                  requestedPostCount,
+                  sinceWhen,
+                });
+          const { data: updated, error: updateError } = await supabase
+            .from("scheduled_scrapes")
+            .update({
+              apify_called_at: new Date().toISOString(),
+              apify_run_id: run.id,
+            })
+            .eq("id", scrape.id)
+            .select("*")
+            .single();
 
-        if (updateError) {
-          throw updateError;
-        }
+          if (updateError) {
+            throw updateError;
+          }
 
-        return updated;
+          return updated;
         }),
     );
     const metaScrape = scrapes.find((scrape) => scrape.scrape_type === "meta");

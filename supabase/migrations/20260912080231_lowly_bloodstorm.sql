@@ -1,0 +1,1 @@
+ALTER TYPE "public"."scheduled_scrape_type" ADD VALUE 'socialblade';

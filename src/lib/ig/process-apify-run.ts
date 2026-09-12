@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { mapSocialbladeProfile } from "@/lib/apify/socialblade";
 import { getActorRun, getDatasetItems } from "@/lib/apify/client";
 import {
   getCanonicalInstagramPostUrl,
@@ -60,6 +61,23 @@ export async function processSucceededApifyRun(
     token,
     datasetId ?? actorRun!.defaultDatasetId,
   );
+
+  if (scrape.scrape_type === "socialblade") {
+    let update: Updatable<"ig_profiles">;
+    try {
+      update = mapSocialbladeProfile(dataset, profile.ig_username);
+    } catch (error) {
+      await markScrapeFailed(admin, scrape.id, error instanceof Error ? error.message : "Invalid SocialBlade account data");
+      return {};
+    }
+    const { error } = await admin.from("ig_profiles").update(update).eq("id", profile.id);
+    if (error) throw error;
+    const { error: stateError } = await admin.from("scheduled_scrapes")
+      .update({ state: { profile: update } }).eq("id", scrape.id);
+    if (stateError) throw stateError;
+    await finishScrape(admin, scrape.id);
+    return {};
+  }
 
   if (scrape.scrape_type === "post_details") {
     const imported = await importDetails(admin, profile, group, scrape, dataset);
@@ -144,7 +162,7 @@ export async function advanceApifyGroupPipeline(
   batchHadOlderPost = false,
   batchUpdatedCount = 0,
 ): Promise<{ startedDetails?: boolean; continued?: boolean }> {
-  if (scrape?.scrape_type === "profile_posts") {
+  if (scrape?.scrape_type === "profile_posts" || scrape?.scrape_type === "socialblade") {
     // The profile-posts run already carries every metric; nothing follows it.
     return {};
   }
@@ -346,6 +364,10 @@ async function applyProfileUpdate(
   group: Group,
   candidates: Updatable<"ig_profiles">[],
 ): Promise<void> {
+  const { data: accountScrapes, error: accountError } = await admin.from("scheduled_scrapes")
+    .select("id").eq("group_id", group.id).eq("scrape_type", "socialblade");
+  if (accountError) throw accountError;
+
   const profileUpdate = candidates.find((value) =>
     Object.values(value).some((entry) => entry != null),
   );
@@ -353,9 +375,15 @@ async function applyProfileUpdate(
     return;
   }
 
+  const mergedUpdate = mergeApifyProfileUpdate(profile, profileUpdate, group.data_source);
+  if (accountScrapes.length > 0) {
+    // SocialBlade owns these account fields even if the post actor finishes last.
+    delete mergedUpdate.follower_count;
+    delete mergedUpdate.ig_name;
+  }
   const { error } = await admin
     .from("ig_profiles")
-    .update(mergeApifyProfileUpdate(profile, profileUpdate, group.data_source))
+    .update(mergedUpdate)
     .eq("id", profile.id);
   if (error) {
     throw error;

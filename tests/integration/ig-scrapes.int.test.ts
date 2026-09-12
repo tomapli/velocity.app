@@ -140,6 +140,28 @@ describe("groups", () => {
 
 describe("scheduled_scrapes", () => {
   describe("constraints", () => {
+    it("stores a SocialBlade account request under the existing ownership policies", async () => {
+      await withRollback(async (client) => {
+        const auth = await insertAuthUser(client);
+        const other = await insertAuthUser(client);
+        await asClaims(client, { sub: auth.id });
+        const profileId = await insertProfile(client, auth.id);
+        const groupId = await insertGroup(client, profileId, auth.id);
+        const { rows } = await client.query(
+          `insert into public.scheduled_scrapes (group_id, scrape_type)
+           values ($1, 'socialblade') returning scrape_type, state`,
+          [groupId],
+        );
+        expect(rows[0]).toEqual({ scrape_type: "socialblade", state: {} });
+
+        await asClaims(client, { sub: other.id });
+        await expect(client.query(
+          `insert into public.scheduled_scrapes (group_id, scrape_type) values ($1, 'socialblade')`,
+          [groupId],
+        )).rejects.toThrow(/row-level security/);
+      });
+    });
+
     it("stores resumable state on a Meta scrape row", async () => {
       await withRollback(async (client) => {
         const auth = await insertAuthUser(client);

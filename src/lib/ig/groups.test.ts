@@ -157,14 +157,14 @@ describe("buildIgScrapeJobs", () => {
     ).toEqual({ finished: 2, expectedTotal: 5, percent: 100 });
   });
 
-  it("surfaces a failed Meta enrichment step", () => {
+  it.each(["meta", "socialblade"] as const)("surfaces a failed %s account request", (scrapeType) => {
     const job = {
       group: GROUP,
       profile: PROFILE,
       scrapes: [
         {
           ...SCRAPE,
-          scrape_type: "meta" as const,
+          scrape_type: scrapeType,
           finished_at: "2026-08-20T10:01:00.000Z",
           error_message: "Meta API unavailable",
         },
@@ -172,5 +172,12 @@ describe("buildIgScrapeJobs", () => {
     };
 
     expect(getIgScrapeJobStatus(job)).toBe("error");
+  });
+
+  it("counts SocialBlade separately from public listings and details", () => {
+    expect(getIgScrapeJobProgress({
+      group: GROUP, profile: PROFILE,
+      scrapes: [{ ...SCRAPE, scrape_type: "socialblade", finished_at: "2026-08-20T10:01:00.000Z" }, SCRAPE],
+    })).toEqual({ finished: 1, expectedTotal: 4, percent: 25 });
   });
 });

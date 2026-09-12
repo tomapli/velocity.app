@@ -40,9 +40,16 @@ import type {
   MetaInstagramAccountSummary,
   MetaOauthProvider,
 } from "@/lib/meta/types";
+import {
+  IG_ACCOUNT_SOURCES,
+  IG_ACCOUNT_SOURCE_LABELS,
+  IG_ACCOUNT_SOURCE_DESCRIPTIONS,
+  SOCIALBLADE_ACTOR_LABEL,
+  type IgAccountSourceSelection,
+} from "@/lib/ig/account-sources";
 import { cn } from "@/lib/utils";
 
-export interface ScrapeParamsConfirmPayload {
+export interface ScrapeParamsConfirmPayload extends IgAccountSourceSelection {
   requestedPostCount: number | null;
   sinceWhen: string | null;
   dataSource: "public" | "meta_hybrid";
@@ -71,7 +78,7 @@ const STEP_DESCRIPTIONS: Record<DialogStep, string> = {
   source:
     "Use private Meta insights when this workspace has access, or deliberately continue with public data.",
   params: "Choose how many posts to collect, or a start date to collect posts from.",
-  method: "Choose which Apify pipeline downloads the public post data.",
+  method: "Choose the account data source and the actor for public posts.",
 };
 
 interface OauthMessage {
@@ -98,6 +105,7 @@ export function ScrapeParamsDialog({
   const [isLoadingConnections, setIsLoadingConnections] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<"public" | "meta_hybrid" | null>(null);
+  const [accountSource, setAccountSource] = useState<IgAccountSourceSelection["accountSource"]>("none");
   const [scrapeMethod, setScrapeMethod] = useState<IgScrapeMethod | null>(null);
   const postCountRef = useRef<HTMLInputElement>(null);
   const sinceWhenRef = useRef<HTMLInputElement>(null);
@@ -141,6 +149,7 @@ export function ScrapeParamsDialog({
     setSelectedAccountId(null);
     setDataSource(null);
     setScrapeMethod(null);
+    setAccountSource("none");
     void loadConnections();
   }, [loadConnections, open]);
 
@@ -221,20 +230,21 @@ export function ScrapeParamsDialog({
       setStep("params");
       return;
     }
-    if (!scrapeMethod) {
+    if (!scrapeMethod || (accountSource === "meta" && !selectedAccountId)) {
       return;
     }
     onConfirm({
       ...range,
-      dataSource,
-      metaInstagramAccountId: dataSource === "meta_hybrid" ? selectedAccountId : null,
+      accountSource,
+      dataSource: accountSource === "meta" ? "meta_hybrid" : "public",
+      metaInstagramAccountId: accountSource === "meta" ? selectedAccountId : null,
       scrapeMethod,
     });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Badge variant={step === "source" ? "default" : "outline"}>1 · Data source</Badge>
@@ -262,11 +272,13 @@ export function ScrapeParamsDialog({
             onContinueMeta={() => {
               if (selectedAccountId) {
                 setDataSource("meta_hybrid");
+                setAccountSource("meta");
                 setStep("params");
               }
             }}
             onContinuePublic={() => {
               setDataSource("public");
+              setAccountSource("none");
               setSelectedAccountId(null);
               setStep("params");
             }}
@@ -287,7 +299,9 @@ export function ScrapeParamsDialog({
           />
         ) : (
           <MethodStep
-            dataSource={dataSource!}
+            accountSource={accountSource}
+            onSelectAccountSource={setAccountSource}
+            hasMetaAccount={selectedAccountId !== null}
             isSubmitting={isSubmitting}
             scrapeMethod={scrapeMethod}
             onSelectMethod={setScrapeMethod}
@@ -525,21 +539,57 @@ function ParamsStep({
 }
 
 function MethodStep({
-  dataSource,
+  accountSource,
+  onSelectAccountSource,
+  hasMetaAccount,
   isSubmitting,
   scrapeMethod,
   onSelectMethod,
 }: {
-  dataSource: "public" | "meta_hybrid";
+  accountSource: IgAccountSourceSelection["accountSource"];
+  onSelectAccountSource: (source: IgAccountSourceSelection["accountSource"]) => void;
+  hasMetaAccount: boolean;
   isSubmitting: boolean;
   scrapeMethod: IgScrapeMethod | null;
   onSelectMethod: (method: IgScrapeMethod) => void;
 }) {
   return (
     <div className="space-y-4 py-2">
-      <Badge variant="outline">
-        {dataSource === "meta_hybrid" ? "Meta + public data" : "Public data"}
-      </Badge>
+      <div className="space-y-2" role="radiogroup" aria-label="Account data source">
+        <Label>Account data · Meta / SocialBlade</Label>
+        {IG_ACCOUNT_SOURCES.map((source) => (
+          <Button
+            key={source}
+            type="button"
+            role="radio"
+            aria-checked={accountSource === source}
+            aria-label={IG_ACCOUNT_SOURCE_LABELS[source]}
+            variant="outline"
+            disabled={isSubmitting || (source === "meta" && !hasMetaAccount)}
+            className={cn(
+              "h-auto w-full justify-start gap-3 whitespace-normal p-3 text-left",
+              accountSource === source && "border-foreground bg-accent dark:border-foreground dark:bg-accent",
+            )}
+            onClick={() => onSelectAccountSource(source)}
+          >
+            <span className="min-w-0 flex-1 space-y-1">
+              <span className="block text-sm font-medium">{IG_ACCOUNT_SOURCE_LABELS[source]}</span>
+              <span className="block text-xs text-muted-foreground">{IG_ACCOUNT_SOURCE_DESCRIPTIONS[source]}</span>
+              {source === "socialblade" ? (
+                <span className="block font-mono text-xs text-muted-foreground">
+                  {SOCIALBLADE_ACTOR_LABEL}
+                </span>
+              ) : null}
+            </span>
+            {accountSource === source ? <Check className="size-4 shrink-0" /> : null}
+          </Button>
+        ))}
+        {!hasMetaAccount ? (
+          <p className="text-xs text-muted-foreground">
+            Select a Meta account in step 1 to enable Meta.
+          </p>
+        ) : null}
+      </div>
       <div className="space-y-2" role="radiogroup" aria-label="Scrape method">
         <Label>How to scrape public data</Label>
         {IG_SCRAPE_METHODS.map((method) => {

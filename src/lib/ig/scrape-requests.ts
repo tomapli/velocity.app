@@ -27,6 +27,7 @@ const PERCENT_MAX = 100;
 const META_PHASES_BEFORE_INSIGHTS = 2;
 
 export const SCRAPE_TYPE_LABELS: Record<ScheduledScrapeType, string> = {
+  socialblade: "SocialBlade account",
   posts: "Posts listing",
   reels: "Reels listing",
   post_details: "Post details",
@@ -35,6 +36,7 @@ export const SCRAPE_TYPE_LABELS: Record<ScheduledScrapeType, string> = {
 };
 
 export const SCRAPE_TYPE_DESCRIPTIONS: Record<ScheduledScrapeType, string> = {
+  socialblade: "Account statistics from dami_studio/socialblade-scraper.",
   posts: "Apify run listing the profile's recent posts.",
   reels: "Apify run listing the profile's recent reels.",
   post_details: `Apify run enriching up to ${APIFY_DETAILS_BATCH_SIZE} listed posts with detailed metrics.`,

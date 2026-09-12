@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/empty";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   isIgPostSortKeyAvailable,
   postsToCsv,
@@ -70,6 +71,7 @@ import {
 } from "@/lib/ig/queries";
 import { deduplicateIgPostsByShortcode } from "@/lib/ig/post-identity";
 import {
+  META_ACCOUNT_INSIGHT_RANGES_DAYS,
   META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS,
   type MetaAccountInsightRangeDays,
 } from "@/lib/meta/constants";
@@ -153,12 +155,10 @@ export function IgProfilePageClient({
     }
   }, [activeSortKey, sortKey]);
 
-  // The account-insights time range narrows the posts list too, so the table
-  // and the insights describe the same window; only hybrid scrapes have it.
+  // Apply the selected upload window to posts from every data source.
   const uploadedSince = useMemo(
-    () =>
-      dataSource === "meta_hybrid" ? getUploadedSinceIso(insightsRangeDays) : null,
-    [dataSource, insightsRangeDays],
+    () => getUploadedSinceIso(insightsRangeDays),
+    [insightsRangeDays],
   );
 
   // Sorting and media filters run in the database so every page reflects the
@@ -175,11 +175,8 @@ export function IgProfilePageClient({
   const loadedPostsQueryVersion = useRef(
     getPostsQueryVersion(
       getPostsDataVersion(initialJob?.profile.id ?? null, initialJob),
-      // Mirrors the server-side initial page fetch so hybrid profiles do not
-      // refetch an identical first page on mount.
-      initialJob?.group.data_source === "meta_hybrid"
-        ? { uploadedSince: getUploadedSinceIso(META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS) }
-        : {},
+      // Mirrors the server-side initial page fetch for every data source.
+      { uploadedSince: getUploadedSinceIso(META_ACCOUNT_INSIGHTS_DEFAULT_RANGE_DAYS) },
     ),
   );
   const loadedInsightsDataVersion = useRef("unloaded");
@@ -368,6 +365,7 @@ export function IgProfilePageClient({
         dataSource: payload.dataSource,
         metaInstagramAccountId: payload.metaInstagramAccountId,
         scrapeMethod: payload.scrapeMethod,
+        accountSource: payload.accountSource,
       });
 
       setProfile(created.profile);
@@ -511,6 +509,28 @@ export function IgProfilePageClient({
         isRescanning={isScheduling}
       />
 
+      {dataSource === "public" ? (
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          aria-label="Posts time range"
+          value={String(insightsRangeDays)}
+          onValueChange={(value) => {
+            const range = META_ACCOUNT_INSIGHT_RANGES_DAYS.find(
+              (days) => String(days) === value,
+            );
+            if (range != null) setInsightsRangeDays(range);
+          }}
+        >
+          {META_ACCOUNT_INSIGHT_RANGES_DAYS.map((days) => (
+            <ToggleGroupItem key={days} value={String(days)}>
+              {days}d
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      ) : null}
+
       {loadingInsightsRange != null && accountInsights.length === 0 ? (
         <AccountInsightsSkeleton />
       ) : accountInsights.length > 0 ? (
@@ -569,7 +589,7 @@ export function IgProfilePageClient({
             <EmptyDescription>
               {mediaTypes.length > 0
                 ? "Pick a different media type or clear the filter to see every post."
-                : "No posts were uploaded in the selected insights range. Pick a longer range to see older posts."}
+                : "No posts were uploaded in the selected time range. Pick a longer range to see older posts."}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
